@@ -6,9 +6,9 @@
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Iconos Phosphor -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Color Thief para extraer colores de las imágenes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
     <style>
@@ -20,7 +20,15 @@
         /* Estilos de la lista de reproducción */
         .playlist-item:hover { background-color: rgba(255, 255, 255, 0.1); }
         .playlist-item.active { background-color: rgba(255, 255, 255, 0.2); }
-        .playlist-item.active .playlist-track-number { color: #fff; font-weight: 600; }
+        .playlist-item.playing .playlist-track-number { color: #1DB954; /* Verde Spotify */ }
+        .playlist-item .playing-indicator { display: none; }
+        .playlist-item.playing .playing-indicator { display: block; }
+
+        /* Animación del ecualizador */
+        .playing-indicator .eq-bar { animation: play 1.2s infinite ease-in-out; background-color: #1DB954; width: 3px; height: 100%; transform-origin: bottom; }
+        .playing-indicator .eq-bar:nth-child(2) { animation-delay: -1.0s; }
+        .playing-indicator .eq-bar:nth-child(3) { animation-delay: -0.8s; }
+        @keyframes play { 0% { transform: scaleY(0.1); } 20% { transform: scaleY(1); } 80% { transform: scaleY(0.1); } 100% { transform: scaleY(0.1); } }
 
         /* Estilos de las tarjetas de temas */
         .topic-card { background-color: #27272a; } /* zinc-800 */
@@ -155,7 +163,6 @@
         const volumeIcon = document.getElementById('volumeIcon');
         const volumeSlider = document.getElementById('volumeSlider');
 
-
         // --- Estado de la App ---
         let playlist = [];
         let currentTopic = { name: '', path: '', cover: null };
@@ -193,7 +200,7 @@
                     topics.forEach(topic => {
                         const card = document.createElement('button');
                         const topicName = topic.name.replace(/_/g, ' ');
-                        card.className = 'topic-card rounded-lg p-3 text-left w-full flex items-center gap-4 hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500';
+                        card.className = 'topic-card rounded-lg p-3 text-left w-full flex items-center gap-4 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500';
                         card.dataset.path = topic.path;
                         card.onclick = () => {
                             document.querySelectorAll('.topic-card').forEach(c => c.classList.remove('active'));
@@ -337,31 +344,34 @@
                     await navigator.share(shareData);
                     return; 
                 } catch (err) {
-                    console.log("Web Share API falló, intentando con el portapapeles.", err);
+                    console.log("Web Share API no disponible o cancelada.", err);
                 }
             }
-
+            
+            // Fallback to clipboard
             try {
                 await navigator.clipboard.writeText(shareUrl);
                 showNotification("¡Enlace copiado al portapapeles!");
             } catch (err) {
-                console.error("Clipboard API falló, usando método antiguo.", err);
+                console.error("Fallo al copiar enlace. Usando método antiguo.", err);
                 const textArea = document.createElement("textarea");
                 textArea.value = shareUrl;
                 textArea.style.position = "fixed";
-                textArea.style.top = "-9999px";
+                textArea.style.opacity = "0";
                 document.body.appendChild(textArea);
+                textArea.focus();
                 textArea.select();
                 try {
                     document.execCommand('copy');
                     showNotification("¡Enlace copiado al portapapeles!");
                 } catch (execErr) {
-                    showNotification("No se pudo copiar el enlace.");
-                    console.error("Fallo al copiar con execCommand:", execErr);
+                    showNotification("Error al copiar el enlace.");
+                    console.error("Fallo total al copiar:", execErr);
                 }
                 document.body.removeChild(textArea);
             }
         }
+
 
         function showNotification(message) {
             notification.textContent = message;
@@ -406,7 +416,7 @@
                  audioPlayer.src = trackData.src;
             }
             currentTrackTitle.textContent = trackData.name;
-            updateActivePlaylistItem();
+            updatePlayingIndicator();
             if (shouldPlay) playAudio();
         }
         
@@ -417,6 +427,7 @@
                 isPlaying = true;
                 playIcon.classList.add('hidden');
                 pauseIcon.classList.remove('hidden');
+                updatePlayingIndicator();
             }).catch(e => console.error("Error al reproducir:", e));
         }
 
@@ -425,6 +436,7 @@
             audioPlayer.pause();
             playIcon.classList.remove('hidden');
             pauseIcon.classList.add('hidden');
+            updatePlayingIndicator();
         }
 
         function nextTrack() {
@@ -502,21 +514,26 @@
                 const numberSpan = document.createElement('span');
                 numberSpan.className = 'playlist-track-number text-gray-400 w-5 text-right font-mono';
                 numberSpan.textContent = `${index + 1}`;
-
+                
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'flex-grow';
                 nameSpan.textContent = trackData.type === 'local' ? trackData.file.name : trackData.name;
 
+                const indicator = document.createElement('div');
+                indicator.className = 'playing-indicator ml-auto h-4 w-5 flex items-center justify-between';
+                indicator.innerHTML = `<span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>`;
+
                 li.appendChild(numberSpan);
                 li.appendChild(nameSpan);
+                li.appendChild(indicator);
                 playlistElement.appendChild(li);
             });
-            updateActivePlaylistItem();
+            updatePlayingIndicator();
         }
         
-        function updateActivePlaylistItem() {
-            document.querySelectorAll('.playlist-item').forEach((item) => {
-                item.classList.toggle('active', parseInt(item.dataset.index) === currentTrackIndex);
+        function updatePlayingIndicator() {
+            document.querySelectorAll('.playlist-item').forEach((item, idx) => {
+                item.classList.toggle('playing', idx === currentTrackIndex && isPlaying);
             });
         }
         
@@ -531,7 +548,7 @@
              playPauseBtn.disabled = false;
              nextBtn.disabled = false;
              prevBtn.disabled = false;
-             shareBtn.disabled = playlist.length > 0 && playlist[0].type !== 'local';
+             shareBtn.disabled = playlist.length > 0 && playlist[0] && playlist[0].type !== 'local';
         }
 
         function setLoadingState(button, isLoading, loadingText) {
@@ -581,6 +598,7 @@
 </body>
 </html>
 
+  
    
 
    
