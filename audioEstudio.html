@@ -529,40 +529,31 @@
         loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
         shareBtn.addEventListener('click', shareCurrentTrack);
 
-   async function shareCurrentTrack() {
-            const shareUrl = window.location.href;
-        
-            const shareData = {
-                title: "Mirá este reproductor de audio",
-                text: "Te comparto este sitio para escuchar audios",
-                url: shareUrl
-            };
-        
-            if (navigator.share) {
-                try {
-                    await navigator.share(shareData);
-                    return;
-                } catch (err) {
-                    console.warn("Compartir cancelado o no disponible", err);
-                }
-            }
-        
-            // Fallback: copiar al portapapeles
+     async function shareCurrentTrack() {
+        const shareUrl = window.location.href;
+
+        if (navigator.share) {
             try {
-                await navigator.clipboard.writeText(shareUrl);
-                showNotification("¡Enlace copiado al portapapeles!");
+                await navigator.share({
+                    title: "Compartir app",
+                    text: "¡Mirá esta app para escuchar audios!",
+                    url: shareUrl
+                });
+                console.log("Compartido con Web Share API");
+                return;
             } catch (err) {
-                console.error("Error al copiar", err);
-                const textArea = document.createElement("textarea");
-                textArea.value = shareUrl;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textArea);
-                showNotification("¡Enlace copiado (método alternativo)!");
+                console.warn("Compartir cancelado", err);
             }
         }
-        
+
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            alert("Enlace copiado al portapapeles");
+        } catch (err) {
+            console.error("Error al copiar enlace", err);
+            alert("No se pudo copiar el enlace");
+        }
+    }
         
         fileInput.addEventListener('change', (e) => {
             const newFiles = Array.from(e.target.files);
