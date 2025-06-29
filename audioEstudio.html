@@ -9,53 +9,61 @@
     <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Iconos Phosphor -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Color Thief para extraer colores de las imágenes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
     <style>
         .progress-bar-container:hover .progress-bar-thumb { opacity: 1; }
         input[type="file"] { display: none; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        .playlist-item:hover { background-color: #1f2937; }
-        .playlist-item.active { background-color: #374151; color: white; }
+        .playlist-item:hover { background-color: rgba(255, 255, 255, 0.1); }
+        .playlist-item.active { background-color: rgba(255, 255, 255, 0.2); }
         .topic-btn { background-color: #374151; }
         .topic-btn:hover { background-color: #4b5563; }
         .topic-btn.active { background-color: #fff; color: #111827; }
+        #player-container { transition: background 0.8s ease; }
     </style>
 </head>
 <body class="bg-black text-white flex items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-lg mx-auto bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
+    <div id="player-container" class="w-full max-w-lg mx-auto bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
         
         <audio id="audioPlayer" crossOrigin="anonymous"></audio>
 
         <!-- Cabecera y Controles Principales -->
-        <div class="p-6 bg-gray-900/80 backdrop-blur-sm border-b border-gray-800">
-            <h1 class="text-2xl font-bold text-center mb-2">Selector de Clases</h1>
-            <p id="currentTrackTitle" class="text-center text-gray-400 font-medium truncate h-6">Selecciona un tema para empezar</p>
+        <div class="p-6 bg-transparent">
+            <div id="albumArtContainer" class="w-32 h-32 mx-auto mb-4 rounded-lg shadow-lg overflow-hidden flex items-center justify-center bg-gray-800">
+                <img id="albumArt" src="" alt="Carátula del Tema" class="w-full h-full object-cover hidden">
+                <i id="albumArtPlaceholder" class="ph-fill ph-music-notes text-4xl text-gray-500"></i>
+            </div>
+
+            <h1 id="topicTitle" class="text-2xl font-bold text-center mb-1">Selector de Clases</h1>
+            <p id="currentTrackTitle" class="text-center text-gray-300 font-medium truncate h-6">Selecciona un tema para empezar</p>
             
             <div class="mt-6">
-                <div id="progressBarContainer" class="progress-bar-container bg-gray-700 rounded-full h-2 cursor-pointer">
+                <div id="progressBarContainer" class="progress-bar-container bg-white/20 rounded-full h-2 cursor-pointer">
                     <div id="progressBar" class="bg-white h-2 rounded-full relative">
                         <div class="progress-bar-thumb w-4 h-4 bg-white rounded-full absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 opacity-0 transition-opacity ring-2 ring-gray-900"></div>
                     </div>
                 </div>
-                <div class="flex justify-between text-xs font-mono text-gray-500 mt-2">
+                <div class="flex justify-between text-xs font-mono text-gray-300 mt-2">
                     <span id="currentTime">00:00</span>
                     <span id="totalDuration">00:00</span>
                 </div>
             </div>
 
             <div class="flex items-center justify-center space-x-6 mt-4">
-                <button id="prevBtn" class="text-gray-400 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
+                <button id="prevBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
                 <button id="playPauseBtn" class="bg-white text-black w-16 h-16 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-200 transition-colors disabled:opacity-50"><i id="playIcon" class="ph-fill ph-play text-4xl ml-1"></i><i id="pauseIcon" class="ph-fill ph-pause text-4xl hidden"></i></button>
-                <button id="nextBtn" class="text-gray-400 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
+                <button id="nextBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
             </div>
         </div>
 
         <!-- Opciones de Carga, Temas y Lista de Reproducción -->
-        <div class="p-6">
+        <div class="p-6 bg-black/20 backdrop-blur-sm">
              <div class="grid sm:grid-cols-2 gap-4 mb-4">
                  <button id="loadTopicsBtn" class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors">
-                    <i id="repoIcon" class="ph-fill ph-github-logo mr-2"></i><span id="repoBtnText">Cargar Temas desde Repo</span>
+                    <i id="repoIcon" class="ph-fill ph-arrow-clockwise mr-2"></i><span id="repoBtnText">Recargar Temas</span>
                 </button>
                 <label for="fileInput" class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors">
                     <i class="ph-fill ph-upload-simple mr-2"></i><span>Cargar Locales</span>
@@ -66,19 +74,20 @@
             <div id="topicsContainer" class="mb-4">
                 <h2 class="text-lg font-semibold mb-2">Temas</h2>
                 <div id="topicsList" class="flex flex-wrap gap-2">
-                     <p id="emptyTopics" class="text-gray-500 text-sm">Presiona "Cargar Temas" para empezar.</p>
+                     <p id="emptyTopics" class="text-gray-500 text-sm">Cargando temas desde GitHub...</p>
                 </div>
             </div>
             
             <h2 class="text-lg font-semibold mb-2">Lista de Reproducción</h2>
-            <div id="playlist" class="max-h-48 overflow-y-auto rounded-lg bg-black/50 p-2">
-                <p id="emptyPlaylist" class="text-gray-500 text-center py-4">Selecciona un tema para ver los audios.</p>
+            <div id="playlist" class="max-h-48 overflow-y-auto rounded-lg p-1">
+                <p id="emptyPlaylist" class="text-gray-400 text-center py-4">Selecciona un tema para ver los audios.</p>
             </div>
         </div>
     </div>
 
     <script>
         // --- Referencias al DOM ---
+        const playerContainer = document.getElementById('player-container');
         const audioPlayer = document.getElementById('audioPlayer');
         const fileInput = document.getElementById('fileInput');
         const loadTopicsBtn = document.getElementById('loadTopicsBtn');
@@ -88,7 +97,11 @@
         const emptyPlaylistMessage = document.getElementById('emptyPlaylist');
         const topicsList = document.getElementById('topicsList');
         const emptyTopics = document.getElementById('emptyTopics');
+        const topicTitle = document.getElementById('topicTitle');
         const currentTrackTitle = document.getElementById('currentTrackTitle');
+        const albumArt = document.getElementById('albumArt');
+        const albumArtPlaceholder = document.getElementById('albumArtPlaceholder');
+        // ... resto de referencias al DOM
         const currentTimeDisplay = document.getElementById('currentTime');
         const totalDurationDisplay = document.getElementById('totalDuration');
         const playPauseBtn = document.getElementById('playPauseBtn');
@@ -101,35 +114,30 @@
 
         // --- Estado de la App ---
         let playlist = [];
+        let currentTopic = { name: '', cover: null };
         let currentTrackIndex = -1;
         let isPlaying = false;
         
         // --- CONFIGURACIÓN DE GITHUB ---
-        // Se han rellenado los valores con la información de tu error.
-        // Asegúrate de que el repositorio sea público.
         const GITHUB_USER = "MARIO-MARTINEZ-SANFILIPPO";
         const GITHUB_REPO = "misAudios";
-        const AUDIO_PATH = "AUDIOS"; // La carpeta principal que contiene las subcarpetas de temas
+        const AUDIO_PATH = "AUDIOS";
 
         // --- Lógica Principal ---
         
-        /**
-         * Carga la lista de temas (subcarpetas) desde el repositorio de GitHub.
-         */
         async function loadTopicsFromRepo() {
-            setLoadingState(loadTopicsBtn, true, "Cargando Temas...");
-            topicsList.innerHTML = ''; // Limpia temas anteriores
+            setLoadingState(loadTopicsBtn, true, "Cargando...");
+            topicsList.innerHTML = ''; 
+            emptyTopics.textContent = "Cargando temas desde GitHub...";
+            topicsList.appendChild(emptyTopics);
 
             const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${AUDIO_PATH}`;
             
             try {
                 const response = await fetch(apiUrl);
-                if (response.status === 404) {
-                    throw new Error(`Repositorio o carpeta no encontrada. Revisa la configuración del script (usuario: ${GITHUB_USER}, repo: ${GITHUB_REPO}, carpeta: ${AUDIO_PATH})`);
-                }
-                if (!response.ok) {
-                    throw new Error(`Error de red: ${response.statusText}`);
-                }
+                if (response.status === 404) throw new Error(`Carpeta no encontrada. Revisa si el repositorio es PÚBLICO y la ruta es correcta.`);
+                if (response.status === 403) throw new Error(`Límite de la API de GitHub alcanzado. Intenta de nuevo más tarde.`);
+                if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
                 const items = await response.json();
                 
                 const topics = items.filter(item => item.type === 'dir');
@@ -138,40 +146,40 @@
                     if(document.body.contains(emptyTopics)) emptyTopics.remove();
                     topics.forEach(topic => {
                         const button = document.createElement('button');
-                        button.textContent = topic.name;
+                        const topicName = topic.name.replace(/_/g, ' ');
+                        button.textContent = topicName;
                         button.className = 'topic-btn text-sm font-medium py-2 px-3 rounded-lg transition-colors';
                         button.onclick = () => {
                             document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
                             button.classList.add('active');
+                            currentTopic.name = topicName;
                             loadAudiosFromTopic(topic.path);
                         };
                         topicsList.appendChild(button);
                     });
+                     topicTitle.textContent = "Selector de Clases";
+                     currentTrackTitle.textContent = "Selecciona un tema";
                 } else {
-                    emptyTopics.textContent = "No se encontraron temas en el repositorio.";
-                    topicsList.appendChild(emptyTopics);
+                    emptyTopics.textContent = "No se encontraron temas (carpetas) en la ruta especificada.";
                 }
 
             } catch (error) {
                 console.error("Error al cargar temas desde GitHub:", error);
-                emptyTopics.textContent = error.message;
-                topicsList.appendChild(emptyTopics);
+                emptyTopics.textContent = `Error: ${error.message}`;
             } finally {
-                setLoadingState(loadTopicsBtn, false, "Cargar Temas desde Repo");
+                setLoadingState(loadTopicsBtn, false, "Recargar Temas");
             }
         }
         
-        /**
-         * Carga los archivos de audio de un tema (subcarpeta) específico.
-         * @param {string} topicPath - La ruta completa de la carpeta del tema.
-         */
         async function loadAudiosFromTopic(topicPath) {
+            topicTitle.textContent = currentTopic.name;
             currentTrackTitle.textContent = 'Cargando audios...';
             playlist = [];
             renderPlaylist();
 
             const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${topicPath}`;
             const audioExtensions = ['.wav', '.mp3', '.ogg', '.flac', '.m4a'];
+            const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 
             try {
                 const response = await fetch(apiUrl);
@@ -180,7 +188,11 @@
                 
                 const audioFiles = files
                     .filter(file => file.type === 'file' && audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext)))
-                    .map(file => ({ type: 'remote', name: file.name, src: file.download_url }));
+                    .map(file => ({ type: 'remote', name: file.name.replace(/_/g, ' ').replace(/\.mp3|\.wav/gi, ''), src: file.download_url }));
+
+                const coverFile = files.find(file => imageExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
+                currentTopic.cover = coverFile ? coverFile.download_url : null;
+                updateTheme(currentTopic.cover);
 
                 if (audioFiles.length === 0) {
                     currentTrackTitle.textContent = "No hay audios en este tema.";
@@ -196,6 +208,31 @@
             }
         }
 
+        function updateTheme(imageUrl) {
+            if (!imageUrl) {
+                playerContainer.style.background = ''; // Vuelve al color por defecto de la clase CSS
+                albumArt.classList.add('hidden');
+                albumArtPlaceholder.classList.remove('hidden');
+                return;
+            }
+
+            albumArt.src = imageUrl;
+            albumArt.classList.remove('hidden');
+            albumArtPlaceholder.classList.add('hidden');
+
+            const colorThief = new ColorThief();
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.src = imageUrl;
+
+            img.onload = () => {
+                const color = colorThief.getColor(img);
+                playerContainer.style.background = `linear-gradient(to bottom, rgb(${color[0]}, ${color[1]}, ${color[2]}) 0%, #111827 50%)`;
+            };
+            img.onerror = () => {
+                 playerContainer.style.background = '';
+            }
+        }
 
         // --- Lógica del Reproductor ---
 
@@ -203,15 +240,8 @@
             if (index < 0 || index >= playlist.length) return;
             currentTrackIndex = index;
             const trackData = playlist[index];
-            
-            if (trackData.type === 'local') {
-                audioPlayer.src = URL.createObjectURL(trackData.file);
-                currentTrackTitle.textContent = trackData.file.name;
-            } else {
-                audioPlayer.src = trackData.src;
-                currentTrackTitle.textContent = trackData.name;
-            }
-            
+            audioPlayer.src = trackData.src;
+            currentTrackTitle.textContent = trackData.name;
             updateActivePlaylistItem();
             if (shouldPlay) playAudio();
         }
@@ -275,8 +305,8 @@
             if(document.body.contains(emptyPlaylistMessage)) emptyPlaylistMessage.remove();
             playlist.forEach((trackData, index) => {
                 const li = document.createElement('li');
-                li.className = 'playlist-item p-3 rounded-md cursor-pointer';
-                li.textContent = trackData.type === 'local' ? trackData.file.name : trackData.name;
+                li.className = 'playlist-item p-3 rounded-md cursor-pointer text-sm';
+                li.textContent = trackData.name;
                 li.dataset.index = index;
                 li.onclick = () => loadTrack(index, true);
                 playlistElement.appendChild(li);
@@ -294,9 +324,6 @@
             playPauseBtn.disabled = true;
             nextBtn.disabled = true;
             prevBtn.disabled = true;
-            progressBar.style.width = '0%';
-            currentTimeDisplay.textContent = '00:00';
-            totalDurationDisplay.textContent = '00:00';
         }
         
         function enableControls() {
@@ -308,26 +335,30 @@
         function setLoadingState(button, isLoading, loadingText) {
             const icon = button.querySelector('i');
             const textSpan = button.querySelector('span');
+            button.disabled = isLoading;
             if (isLoading) {
-                button.disabled = true;
                 textSpan.textContent = loadingText;
                 icon.classList.add('animate-spin');
             } else {
-                button.disabled = false;
-                textSpan.textContent = "Cargar Temas desde Repo";
+                textSpan.textContent = "Recargar Temas";
                 icon.classList.remove('animate-spin');
             }
         }
-        
+
         // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', loadTopicsFromRepo);
         loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
+        
         fileInput.addEventListener('change', (e) => {
             const newFiles = Array.from(e.target.files);
             if (newFiles.length === 0) return;
-            playlist = newFiles.map(file => ({ type: 'local', file: file }));
+            playlist = newFiles.map(file => ({ type: 'local', name: file.name, file: file }));
             renderPlaylist();
             loadTrack(0, false);
+            updateTheme(null); // Resetea el tema al cargar locales
+            topicTitle.textContent = "Archivos Locales";
         });
+        
         playPauseBtn.addEventListener('click', () => isPlaying ? pauseAudio() : playAudio());
         nextBtn.addEventListener('click', nextTrack);
         prevBtn.addEventListener('click', prevTrack);
@@ -343,6 +374,8 @@
     </script>
 </body>
 </html>
+
+  
 
    
 
