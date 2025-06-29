@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,7 +11,6 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <!-- Color Thief para extraer colores de las imágenes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
-
     <style>
         .progress-bar-container:hover .progress-bar-thumb { opacity: 1; }
         input[type="file"] { display: none; }
@@ -27,53 +26,39 @@
         .playlist-item.playing .playing-indicator { display: block; }
 
         /* Animación del ecualizador */
-        .playing-indicator .eq-bar { animation: play 1.2s infinite ease-in-out; background-color: #1DB954; /* Verde Spotify */ width: 3px; height: 100%; transform-origin: bottom; }
+        .playing-indicator .eq-bar { animation: play 1.2s infinite ease-in-out; background-color: #1DB954; width: 3px; height: 100%; transform-origin: bottom; }
         .playing-indicator .eq-bar:nth-child(2) { animation-delay: -1.0s; }
         .playing-indicator .eq-bar:nth-child(3) { animation-delay: -0.8s; }
         @keyframes play { 0% { transform: scaleY(0.1); } 20% { transform: scaleY(1); } 80% { transform: scaleY(0.1); } 100% { transform: scaleY(0.1); } }
 
         /* Estilos de las tarjetas de temas */
-        .topic-card { 
-            background-color: #27272a; /* zinc-800 */
-            border: 1px solid transparent; /* Para evitar saltos de layout */
-        }
-        .topic-card:hover { 
-            background-color: #3f3f46; /* zinc-700 */
-        }
-        .topic-card.active { 
-            background-color: #18181b; /* zinc-900 */
-            border-color: #6d28d9; /* violet-700 */
-        }
-        .topic-card.active i, .topic-card.active span { 
-            color: #fff; 
-        }
+        .topic-card { background-color: #27272a; border: 1px solid transparent; }
+        .topic-card:hover { background-color: #3f3f46; }
+        .topic-card.active { background-color: #18181b; border-color: #6d28d9; }
+        .topic-card.active i, .topic-card.active span { color: #fff; }
 
         #player-container { transition: background 0.8s ease; }
         
         /* Notificación */
-        #notification {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #fff;
-            color: #111;
-            padding: 10px 20px;
-            border-radius: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            opacity: 0;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            pointer-events: none;
-        }
-        #notification.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(-10px);
-        }
+        #notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #fff; color: #111; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; }
+        #notification.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
 
         /* Estilos del slider de volumen */
         #volumeSlider { -webkit-appearance: none; appearance: none; width: 100%; height: 5px; background: rgba(255, 255, 255, 0.3); border-radius: 5px; outline: none; transition: opacity 0.2s; }
         #volumeSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; background: #fff; cursor: pointer; border-radius: 50%; }
         #volumeSlider::-moz-range-thumb { width: 14px; height: 14px; background: #fff; cursor: pointer; border-radius: 50%; }
+        
+        /* Estilos de Transcripción */
+        #transcriptionContainer { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out; }
+        #transcriptionContainer.open { max-height: 200px; padding-top: 1rem; padding-bottom: 1rem; }
+        #transcriptionContent { white-space: pre-wrap; word-wrap: break-word; }
+
+        /* Estilo para el interruptor de filtro */
+        #transcriptToggle { appearance: none; width: 40px; height: 20px; background-color: #3f3f46; border-radius: 10px; position: relative; cursor: pointer; transition: background-color 0.2s ease-in-out; }
+        #transcriptToggle::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background-color: white; top: 2px; left: 2px; transition: transform 0.2s ease-in-out; }
+        #transcriptToggle:checked { background-color: #1DB954; }
+        #transcriptToggle:checked::before { transform: translateX(20px); }
+
     </style>
 </head>
 <body class="bg-black text-white flex items-center justify-center min-h-screen p-4">
@@ -105,14 +90,11 @@
             </div>
 
             <div class="flex items-center justify-center space-x-2 sm:space-x-4 mt-4">
-                <button id="shareBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Compartir"><i class="ph-fill ph-share-network text-2xl"></i></button>
+                 <button id="transcriptBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Transcripción"><i class="ph-fill ph-text-align-left text-2xl"></i></button>
                 <button id="prevBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
                 <button id="playPauseBtn" class="bg-white text-black w-16 h-16 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-200 transition-colors disabled:opacity-50"><i id="playIcon" class="ph-fill ph-play text-4xl ml-1"></i><i id="pauseIcon" class="ph-fill ph-pause text-4xl hidden"></i></button>
                 <button id="nextBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
-                <div class="flex items-center gap-2 group w-24"> <!-- Contenedor de Volumen -->
-                    <button id="volumeIconBtn"><i id="volumeIcon" class="ph-fill ph-speaker-high text-2xl text-gray-300 group-hover:text-white"></i></button>
-                    <input id="volumeSlider" type="range" min="0" max="100" value="100" class="w-full">
-                </div>
+                <button id="shareBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Compartir"><i class="ph-fill ph-share-network text-2xl"></i></button>
             </div>
         </div>
 
@@ -126,6 +108,10 @@
                     <i class="ph-fill ph-upload-simple mr-2"></i><span>Cargar Locales</span>
                 </label>
              </div>
+             <div class="flex items-center gap-2 group w-full my-4"> <!-- Contenedor de Volumen -->
+                    <button id="volumeIconBtn"><i id="volumeIcon" class="ph-fill ph-speaker-high text-2xl text-gray-300 group-hover:text-white"></i></button>
+                    <input id="volumeSlider" type="range" min="0" max="100" value="100" class="w-full">
+                </div>
             <input type="file" id="fileInput" multiple accept="audio/*">
             
             <div id="topicsContainer" class="mb-4">
@@ -135,9 +121,23 @@
                 </div>
             </div>
             
-            <h2 class="text-lg font-semibold mb-2">Lista de Reproducción</h2>
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-lg font-semibold">Lista de Reproducción</h2>
+                <div class="flex items-center space-x-2 text-sm text-gray-400">
+                    <label for="transcriptToggle" class="cursor-pointer">Sólo con transcripción</label>
+                    <input type="checkbox" id="transcriptToggle">
+                </div>
+            </div>
             <div id="playlist" class="max-h-48 overflow-y-auto rounded-lg p-1">
                 <p id="emptyPlaylist" class="text-gray-400 text-center py-4">Selecciona un tema para ver los audios.</p>
+            </div>
+
+            <!-- Panel de Transcripción -->
+            <div id="transcriptionContainer" class="px-2">
+                 <h2 class="text-lg font-semibold mb-2">Transcripción</h2>
+                 <div id="transcriptionContent" class="text-sm text-gray-300 bg-black/30 p-4 rounded-lg max-h-40 overflow-y-auto">
+                     <p id="transcriptPlaceholder">La transcripción aparecerá aquí.</p>
+                 </div>
             </div>
         </div>
     </div>
@@ -161,6 +161,11 @@
         const albumArt = document.getElementById('albumArt');
         const albumArtPlaceholder = document.getElementById('albumArtPlaceholder');
         const shareBtn = document.getElementById('shareBtn');
+        const transcriptBtn = document.getElementById('transcriptBtn');
+        const transcriptionContainer = document.getElementById('transcriptionContainer');
+        const transcriptionContent = document.getElementById('transcriptionContent');
+        const transcriptPlaceholder = document.getElementById('transcriptPlaceholder');
+        const transcriptToggle = document.getElementById('transcriptToggle');
         const notification = document.getElementById('notification');
         const currentTimeDisplay = document.getElementById('currentTime');
         const totalDurationDisplay = document.getElementById('totalDuration');
@@ -176,7 +181,8 @@
         const volumeSlider = document.getElementById('volumeSlider');
 
         // --- Estado de la App ---
-        let playlist = [];
+        let fullPlaylist = []; // Almacena la lista completa sin filtrar
+        let playlist = []; // Almacena la lista que se muestra (puede estar filtrada)
         let currentTopic = { name: '', path: '', cover: null };
         let currentTrackIndex = -1;
         let isPlaying = false;
@@ -257,6 +263,7 @@
             }
 
             currentTrackTitle.textContent = 'Cargando audios...';
+            fullPlaylist = [];
             playlist = [];
             renderPlaylist();
 
@@ -269,9 +276,21 @@
                 if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
                 const files = await response.json();
                 
-                const audioFiles = files
-                    .filter(file => file.type === 'file' && audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext)))
-                    .map(file => ({ type: 'remote', name: file.name.replace(/_/g, ' ').replace(/\.mp3|\.wav/gi, ''), src: file.download_url, duration: '--:--' }));
+                const audioFilesData = files.filter(file => file.type === 'file' && audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
+                const transcriptFiles = files.filter(file => file.name.toLowerCase().endsWith('.txt'));
+
+                const audioFiles = audioFilesData.map(file => {
+                    const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                    const transcriptFile = transcriptFiles.find(tFile => tFile.name.substring(0, tFile.name.lastIndexOf('.')) === baseName);
+                    return {
+                        type: 'remote', 
+                        name: baseName.replace(/_/g, ' '),
+                        src: file.download_url, 
+                        duration: '--:--',
+                        transcriptUrl: transcriptFile ? transcriptFile.download_url : null
+                    };
+                });
+
 
                 const coverFile = files.find(file => imageExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
                 currentTopic.cover = coverFile ? coverFile.download_url : null;
@@ -279,16 +298,13 @@
 
                 if (audioFiles.length === 0) {
                     currentTrackTitle.textContent = "No hay audios en este tema.";
-                    playlist = [];
-                    renderPlaylist();
                 } else {
-                    playlist = audioFiles;
-                    renderPlaylist(); // Renderiza la lista primero con duraciones placeholder
+                    fullPlaylist = audioFiles;
+                    applyFilterAndRenderPlaylist();
                     loadTrack(trackToLoad, false);
                     if (startTime > 0) {
                         audioPlayer.currentTime = startTime;
                     }
-                    // Ahora busca las duraciones
                     fetchAllDurations();
                 }
             } catch (error) {
@@ -297,10 +313,20 @@
             }
         }
 
+        function applyFilterAndRenderPlaylist() {
+            if (transcriptToggle.checked) {
+                playlist = fullPlaylist.filter(track => track.transcriptUrl);
+            } else {
+                playlist = fullPlaylist;
+            }
+            renderPlaylist();
+        }
+
         function fetchAllDurations() {
             playlist.forEach((track, index) => {
-                const durationElement = document.querySelector(`.playlist-item[data-index="${index}"] .track-duration`);
-                if(durationElement) {
+                const listItem = document.querySelector(`.playlist-item[data-real-index="${index}"]`);
+                if(listItem) {
+                    const durationElement = listItem.querySelector('.track-duration');
                     fetchTrackDuration(track.src, durationElement);
                 }
             });
@@ -316,6 +342,27 @@
             });
         }
         
+        async function loadTranscription(url) {
+            transcriptPlaceholder.textContent = 'Cargando transcripción...';
+            transcriptBtn.disabled = true;
+            if (!url) {
+                transcriptPlaceholder.textContent = 'Transcripción no disponible para esta pista.';
+                transcriptBtn.disabled = true;
+                return;
+            }
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('No se pudo cargar la transcripción.');
+                const text = await response.text();
+                transcriptionContent.textContent = text;
+                transcriptBtn.disabled = false;
+            } catch(error) {
+                console.error(error);
+                transcriptPlaceholder.textContent = 'Error al cargar la transcripción.';
+                transcriptBtn.disabled = true;
+            }
+        }
+
         // --- Lógica de Estado y Compartir ---
 
         function saveState() {
@@ -451,6 +498,7 @@
             }
             currentTrackTitle.textContent = trackData.name;
             updatePlayingIndicator();
+            loadTranscription(trackData.transcriptUrl);
             if (shouldPlay) playAudio();
         }
         
@@ -543,6 +591,9 @@
                 const li = document.createElement('li');
                 li.className = 'playlist-item p-3 rounded-lg cursor-pointer text-sm flex items-center gap-4';
                 li.dataset.index = index;
+                // Guardamos el índice real de la lista completa para poder buscar duraciones
+                const realIndex = fullPlaylist.findIndex(track => track.src === trackData.src);
+                li.dataset.realIndex = realIndex;
                 li.onclick = () => loadTrack(index, true);
 
                 const numberSpan = document.createElement('span');
@@ -572,9 +623,10 @@
         }
         
         function updatePlayingIndicator() {
-            document.querySelectorAll('.playlist-item').forEach((item, idx) => {
-                item.classList.toggle('active', idx === currentTrackIndex);
-                item.classList.toggle('playing', idx === currentTrackIndex && isPlaying);
+            document.querySelectorAll('.playlist-item').forEach((item) => {
+                const itemIndex = parseInt(item.dataset.index);
+                item.classList.toggle('active', itemIndex === currentTrackIndex);
+                item.classList.toggle('playing', itemIndex === currentTrackIndex && isPlaying);
             });
         }
         
@@ -583,6 +635,7 @@
             nextBtn.disabled = true;
             prevBtn.disabled = true;
             shareBtn.disabled = true;
+            transcriptBtn.disabled = true;
         }
         
         function enableControls() {
@@ -590,6 +643,7 @@
              nextBtn.disabled = false;
              prevBtn.disabled = false;
              shareBtn.disabled = playlist.length > 0 && playlist[0] && playlist[0].type !== 'local';
+             transcriptBtn.disabled = false;
         }
 
         function setLoadingState(button, isLoading, loadingText) {
@@ -609,14 +663,17 @@
         document.addEventListener('DOMContentLoaded', loadTopicsFromRepo);
         loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
         shareBtn.addEventListener('click', shareCurrentTrack);
+        transcriptBtn.addEventListener('click', () => transcriptionContainer.classList.toggle('open'));
+        transcriptToggle.addEventListener('change', applyFilterAndRenderPlaylist);
         
         fileInput.addEventListener('change', (e) => {
             const newFiles = Array.from(e.target.files);
             if (newFiles.length === 0) return;
-            playlist = newFiles.map(file => ({ type: 'local', name: file.name, file: file }));
+            playlist = newFiles.map(file => ({ type: 'local', name: file.name, file: file, duration: '--:--', transcriptUrl: null }));
             localStorage.removeItem('audioPlayerState');
             renderPlaylist();
             loadTrack(0, false);
+            fetchAllDurations();
             updateTheme(null);
             topicTitle.textContent = "Archivos Locales";
         });
@@ -641,6 +698,7 @@
     </script>
 </body>
 </html>
+
 
    
 
