@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
@@ -51,8 +52,7 @@
         /* Estilos de Transcripción */
         #transcriptionContainer { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out; }
         #transcriptionContainer.open { max-height: 200px; padding-top: 1rem; padding-bottom: 1rem; }
-        .lyrics-line { padding: 4px 8px; border-radius: 4px; transition: background-color 0.3s, color 0.3s; color: #a1a1aa; /* zinc-400 */ }
-        .lyrics-line.highlight { background-color: rgba(255, 255, 255, 0.1); color: #fff; }
+        #transcriptionContent { white-space: pre-wrap; word-wrap: break-word; }
 
     </style>
 </head>
@@ -123,7 +123,7 @@
 
             <!-- Panel de Transcripción -->
             <div id="transcriptionContainer" class="px-2">
-                 <h2 class="text-lg font-semibold mb-2">Transcripción Sincronizada</h2>
+                 <h2 class="text-lg font-semibold mb-2">Transcripción</h2>
                  <div id="transcriptionContent" class="text-sm text-gray-300 bg-black/30 p-2 rounded-lg max-h-40 overflow-y-auto">
                      <p id="transcriptPlaceholder">La transcripción aparecerá aquí.</p>
                  </div>
@@ -170,7 +170,6 @@
 
         // --- Estado de la App ---
         let playlist = [];
-        let currentLyrics = [];
         let currentTopic = { name: '', path: '', cover: null };
         let currentTrackIndex = -1;
         let isPlaying = false;
@@ -257,7 +256,7 @@
             const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${topicPath}`;
             const audioExtensions = ['.wav', '.mp3', '.ogg', '.flac', '.m4a'];
             const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-            const transcriptExtension = '.lrc';
+            const transcriptExtension = '.txt'; // <-- CAMBIADO A .TXT
 
             try {
                 const response = await fetch(apiUrl);
@@ -278,7 +277,6 @@
                         transcriptUrl: transcriptFile ? transcriptFile.download_url : null
                     };
                 });
-
 
                 const coverFile = files.find(file => imageExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
                 currentTopic.cover = coverFile ? coverFile.download_url : null;
@@ -327,7 +325,6 @@
             transcriptPlaceholder.textContent = 'Cargando transcripción...';
             transcriptionContent.appendChild(transcriptPlaceholder);
             transcriptBtn.disabled = true;
-            currentLyrics = [];
 
             if (!url) {
                 transcriptPlaceholder.textContent = 'Transcripción no disponible para esta pista.';
@@ -336,73 +333,12 @@
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('No se pudo cargar la transcripción.');
-                const lrcText = await response.text();
-                currentLyrics = parseLRC(lrcText);
-
-                if (currentLyrics.length > 0) {
-                    transcriptionContent.innerHTML = ''; // Limpia el placeholder
-                    currentLyrics.forEach((line, index) => {
-                        const p = document.createElement('p');
-                        p.textContent = line.text;
-                        p.className = 'lyrics-line';
-                        p.dataset.index = index;
-                        transcriptionContent.appendChild(p);
-                    });
-                    transcriptBtn.disabled = false;
-                } else {
-                     transcriptPlaceholder.textContent = 'Formato de transcripción inválido o vacío.';
-                }
+                const text = await response.text();
+                transcriptionContent.textContent = text;
+                transcriptBtn.disabled = false;
             } catch(error) {
                 console.error(error);
                 transcriptPlaceholder.textContent = 'Error al cargar la transcripción.';
-            }
-        }
-
-        function parseLRC(lrc) {
-            const lines = lrc.split('\n');
-            const lyrics = [];
-            const regex = /\[(\d{2}):(\d{2})\.?(\d{2,3})?\](.*)/;
-            
-            for (const line of lines) {
-                const match = line.match(regex);
-                if (match) {
-                    const min = parseInt(match[1], 10);
-                    const sec = parseInt(match[2], 10);
-                    const ms = parseInt(match[3] || '0', 10);
-                    const text = match[4].trim();
-                    const time = min * 60 + sec + ms / 1000;
-                    lyrics.push({ time, text });
-                }
-            }
-            return lyrics;
-        }
-
-        function highlightCurrentLyric() {
-            if (!currentLyrics.length) return;
-
-            let currentIndex = -1;
-            for (let i = 0; i < currentLyrics.length; i++) {
-                if (audioPlayer.currentTime > currentLyrics[i].time) {
-                    currentIndex = i;
-                } else {
-                    break;
-                }
-            }
-            
-            if (currentIndex > -1) {
-                 const allLines = transcriptionContent.querySelectorAll('.lyrics-line');
-                 allLines.forEach(line => line.classList.remove('highlight'));
-                 
-                 const currentLine = transcriptionContent.querySelector(`.lyrics-line[data-index="${currentIndex}"]`);
-                 if(currentLine) {
-                     currentLine.classList.add('highlight');
-                     // Solo desplazar si el elemento no está visible
-                     const containerRect = transcriptionContent.getBoundingClientRect();
-                     const lineRect = currentLine.getBoundingClientRect();
-                     if (lineRect.top < containerRect.top || lineRect.bottom > containerRect.bottom) {
-                        currentLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                     }
-                 }
             }
         }
         
@@ -579,7 +515,6 @@
             if (audioPlayer.duration && isFinite(audioPlayer.duration)) {
                 progressBar.style.width = `${(audioPlayer.currentTime / audioPlayer.duration) * 100}%`;
                 currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
-                highlightCurrentLyric();
                 if (++timeUpdateCounter > 5) {
                     saveState();
                     timeUpdateCounter = 0;
@@ -739,6 +674,8 @@
     </script>
 </body>
 </html>
+
+  
 
    
 
