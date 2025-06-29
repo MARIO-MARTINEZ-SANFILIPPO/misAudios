@@ -6,9 +6,9 @@
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Iconos Phosphor -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Color Thief para extraer colores de las imágenes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
     <style>
@@ -49,6 +49,11 @@
             opacity: 1;
             transform: translateX(-50%) translateY(-10px);
         }
+
+        /* Estilos del slider de volumen */
+        #volumeSlider { -webkit-appearance: none; appearance: none; width: 100%; height: 5px; background: rgba(255, 255, 255, 0.3); border-radius: 5px; outline: none; transition: opacity 0.2s; }
+        #volumeSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; background: #fff; cursor: pointer; border-radius: 50%; }
+        #volumeSlider::-moz-range-thumb { width: 14px; height: 14px; background: #fff; cursor: pointer; border-radius: 50%; }
     </style>
 </head>
 <body class="bg-black text-white flex items-center justify-center min-h-screen p-4">
@@ -79,12 +84,15 @@
                 </div>
             </div>
 
-            <div class="flex items-center justify-center space-x-6 mt-4">
+            <div class="flex items-center justify-center space-x-2 sm:space-x-4 mt-4">
                 <button id="shareBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Compartir"><i class="ph-fill ph-share-network text-2xl"></i></button>
                 <button id="prevBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
                 <button id="playPauseBtn" class="bg-white text-black w-16 h-16 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-200 transition-colors disabled:opacity-50"><i id="playIcon" class="ph-fill ph-play text-4xl ml-1"></i><i id="pauseIcon" class="ph-fill ph-pause text-4xl hidden"></i></button>
                 <button id="nextBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
-                 <div class="w-8"></div> <!-- Espaciador para simetría -->
+                <div class="flex items-center gap-2 group w-24"> <!-- Contenedor de Volumen -->
+                    <button id="volumeIconBtn"><i id="volumeIcon" class="ph-fill ph-speaker-high text-2xl text-gray-300 group-hover:text-white"></i></button>
+                    <input id="volumeSlider" type="range" min="0" max="100" value="100" class="w-full">
+                </div>
             </div>
         </div>
 
@@ -143,6 +151,10 @@
         const prevBtn = document.getElementById('prevBtn');
         const progressBarContainer = document.getElementById('progressBarContainer');
         const progressBar = document.getElementById('progressBar');
+        const volumeIconBtn = document.getElementById('volumeIconBtn');
+        const volumeIcon = document.getElementById('volumeIcon');
+        const volumeSlider = document.getElementById('volumeSlider');
+
 
         // --- Estado de la App ---
         let playlist = [];
@@ -150,6 +162,7 @@
         let currentTrackIndex = -1;
         let isPlaying = false;
         let timeUpdateCounter = 0;
+        let lastVolume = 1;
         
         // --- CONFIGURACIÓN DE GITHUB ---
         const GITHUB_USER = "MARIO-MARTINEZ-SANFILIPPO";
@@ -265,11 +278,12 @@
         // --- Lógica de Estado y Compartir ---
 
         function saveState() {
-             if (playlist.length === 0 || playlist[0].type === 'local') return;
+             if (playlist.length === 0 || (playlist[0] && playlist[0].type === 'local')) return;
              const state = {
                  topicPath: currentTopic.path,
                  trackIndex: currentTrackIndex,
-                 time: audioPlayer.currentTime
+                 time: audioPlayer.currentTime,
+                 volume: audioPlayer.volume
              };
              localStorage.setItem('audioPlayerState', JSON.stringify(state));
         }
@@ -287,7 +301,11 @@
             
             const savedState = localStorage.getItem('audioPlayerState');
             if (savedState) {
-                const { topicPath, trackIndex, time } = JSON.parse(savedState);
+                const { topicPath, trackIndex, time, volume } = JSON.parse(savedState);
+                if (volume !== undefined) {
+                    volumeSlider.value = volume * 100;
+                    setVolume(volume);
+                }
                 if (topicPath) {
                     loadAudiosFromTopic(topicPath, trackIndex, time);
                 }
@@ -298,30 +316,50 @@
         }
         
         async function shareCurrentTrack() {
-            if (currentTrackIndex === -1 || playlist[0].type === 'local') {
+            if (currentTrackIndex === -1 || (playlist[0] && playlist[0].type === 'local')) {
                 showNotification("No se puede compartir esta pista");
                 return;
             }
             const trackName = playlist[currentTrackIndex].name;
-            const url = new URL(window.location);
+            const url = new URL(window.location.href.split('?')[0]);
             url.searchParams.set('topic', currentTopic.path);
             url.searchParams.set('track', currentTrackIndex);
-            
+            const shareUrl = url.toString();
+
             const shareData = {
                 title: `Estoy escuchando: ${currentTopic.name}`,
                 text: `Escucha "${trackName}" del tema "${currentTopic.name}"`,
-                url: url.toString(),
+                url: shareUrl,
             };
-            
-            try {
-                if (navigator.share) {
+
+            if (navigator.share) {
+                try {
                     await navigator.share(shareData);
-                } else {
-                    throw new Error('Web Share API not supported');
+                    return; 
+                } catch (err) {
+                    console.log("Web Share API falló, intentando con el portapapeles.", err);
                 }
-            } catch (err) {
-                navigator.clipboard.writeText(url.toString());
+            }
+
+            try {
+                await navigator.clipboard.writeText(shareUrl);
                 showNotification("¡Enlace copiado al portapapeles!");
+            } catch (err) {
+                console.error("Clipboard API falló, usando método antiguo.", err);
+                const textArea = document.createElement("textarea");
+                textArea.value = shareUrl;
+                textArea.style.position = "fixed";
+                textArea.style.top = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showNotification("¡Enlace copiado al portapapeles!");
+                } catch (execErr) {
+                    showNotification("No se pudo copiar el enlace.");
+                    console.error("Fallo al copiar con execCommand:", execErr);
+                }
+                document.body.removeChild(textArea);
             }
         }
 
@@ -415,6 +453,28 @@
         function setProgress(e) {
             const duration = audioPlayer.duration;
             if (duration && isFinite(duration)) audioPlayer.currentTime = (e.offsetX / progressBarContainer.clientWidth) * duration;
+        }
+        
+        function setVolume(volumeLevel) {
+            audioPlayer.volume = volumeLevel;
+            if (volumeLevel === 0) {
+                volumeIcon.className = 'ph-fill ph-speaker-slash text-2xl text-gray-300 group-hover:text-white';
+            } else if (volumeLevel < 0.5) {
+                volumeIcon.className = 'ph-fill ph-speaker-low text-2xl text-gray-300 group-hover:text-white';
+            } else {
+                volumeIcon.className = 'ph-fill ph-speaker-high text-2xl text-gray-300 group-hover:text-white';
+            }
+        }
+
+        function toggleMute() {
+            if (audioPlayer.volume > 0) {
+                lastVolume = audioPlayer.volume;
+                setVolume(0);
+                volumeSlider.value = 0;
+            } else {
+                setVolume(lastVolume);
+                volumeSlider.value = lastVolume * 100;
+            }
         }
 
         function formatTime(seconds) {
@@ -512,12 +572,16 @@
         });
         audioPlayer.addEventListener('ended', nextTrack);
         progressBarContainer.addEventListener('click', setProgress);
+        volumeSlider.addEventListener('input', (e) => setVolume(e.target.value / 100));
+        volumeIconBtn.addEventListener('click', toggleMute);
 
         // --- Inicialización ---
         disableControls();
     </script>
 </body>
 </html>
+
+   
 
    
 
