@@ -6,9 +6,9 @@
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Iconos Phosphor -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Color Thief para extraer colores de las imágenes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
     <style>
@@ -16,12 +16,21 @@
         input[type="file"] { display: none; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
+        
+        /* Estilos de la lista de reproducción */
         .playlist-item:hover { background-color: rgba(255, 255, 255, 0.1); }
         .playlist-item.active { background-color: rgba(255, 255, 255, 0.2); }
-        .topic-btn { background-color: #374151; }
-        .topic-btn:hover { background-color: #4b5563; }
-        .topic-btn.active { background-color: #fff; color: #111827; }
+        .playlist-item.active .playlist-track-number { color: #fff; font-weight: 600; }
+
+        /* Estilos de las tarjetas de temas */
+        .topic-card { background-color: #27272a; } /* zinc-800 */
+        .topic-card:hover { background-color: #3f3f46; } /* zinc-700 */
+        .topic-card.active { background-color: #6d28d9; color: #fff; } /* violet-700 */
+        .topic-card.active i { color: #fff; }
+
         #player-container { transition: background 0.8s ease; }
+        
+        /* Notificación */
         #notification {
             position: fixed;
             bottom: 20px;
@@ -93,8 +102,8 @@
             
             <div id="topicsContainer" class="mb-4">
                 <h2 class="text-lg font-semibold mb-2">Temas</h2>
-                <div id="topicsList" class="flex flex-wrap gap-2">
-                     <p id="emptyTopics" class="text-gray-500 text-sm">Cargando temas desde GitHub...</p>
+                <div id="topicsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     <p id="emptyTopics" class="text-gray-500 text-sm col-span-full">Cargando temas desde GitHub...</p>
                 </div>
             </div>
             
@@ -169,19 +178,28 @@
                 if (topics.length > 0) {
                     if(document.body.contains(emptyTopics)) emptyTopics.remove();
                     topics.forEach(topic => {
-                        const button = document.createElement('button');
+                        const card = document.createElement('button');
                         const topicName = topic.name.replace(/_/g, ' ');
-                        button.textContent = topicName;
-                        button.className = 'topic-btn text-sm font-medium py-2 px-3 rounded-lg transition-colors';
-                        button.dataset.path = topic.path;
-                        button.onclick = () => {
-                            document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
-                            button.classList.add('active');
+                        card.className = 'topic-card rounded-lg p-3 text-left w-full flex items-center gap-4 hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500';
+                        card.dataset.path = topic.path;
+                        card.onclick = () => {
+                            document.querySelectorAll('.topic-card').forEach(c => c.classList.remove('active'));
+                            card.classList.add('active');
                             currentTopic.name = topicName;
                             currentTopic.path = topic.path;
                             loadAudiosFromTopic(topic.path);
                         };
-                        topicsList.appendChild(button);
+
+                        const icon = document.createElement('i');
+                        icon.className = 'ph-fill ph-folder-simple text-3xl text-gray-400';
+
+                        const textSpan = document.createElement('span');
+                        textSpan.className = 'font-semibold flex-grow';
+                        textSpan.textContent = topicName;
+
+                        card.appendChild(icon);
+                        card.appendChild(textSpan);
+                        topicsList.appendChild(card);
                     });
                      checkInitialState();
                 } else {
@@ -197,11 +215,11 @@
         }
         
         async function loadAudiosFromTopic(topicPath, trackToLoad = 0, startTime = 0) {
-            const topicButton = document.querySelector(`.topic-btn[data-path="${topicPath}"]`);
+            const topicButton = document.querySelector(`.topic-card[data-path="${topicPath}"]`);
             if (topicButton) {
-                 document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
+                 document.querySelectorAll('.topic-card').forEach(btn => btn.classList.remove('active'));
                  topicButton.classList.add('active');
-                 currentTopic.name = topicButton.textContent;
+                 currentTopic.name = topicButton.querySelector('span').textContent;
                  currentTopic.path = topicPath;
                  topicTitle.textContent = currentTopic.name;
             }
@@ -263,7 +281,6 @@
 
             if (topicParam) {
                 loadAudiosFromTopic(topicParam, parseInt(trackParam || 0));
-                // Limpia la URL para que no se recargue lo mismo al refrescar
                 window.history.replaceState({}, document.title, window.location.pathname);
                 return;
             }
@@ -388,7 +405,6 @@
             if (audioPlayer.duration && isFinite(audioPlayer.duration)) {
                 progressBar.style.width = `${(audioPlayer.currentTime / audioPlayer.duration) * 100}%`;
                 currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
-                // Guarda el estado cada ~5 segundos
                 if (++timeUpdateCounter > 5) {
                     saveState();
                     timeUpdateCounter = 0;
@@ -419,10 +435,20 @@
             if(document.body.contains(emptyPlaylistMessage)) emptyPlaylistMessage.remove();
             playlist.forEach((trackData, index) => {
                 const li = document.createElement('li');
-                li.className = 'playlist-item p-3 rounded-md cursor-pointer text-sm';
-                li.textContent = trackData.type === 'local' ? trackData.file.name : trackData.name;
+                li.className = 'playlist-item p-3 rounded-lg cursor-pointer text-sm flex items-center gap-4';
                 li.dataset.index = index;
                 li.onclick = () => loadTrack(index, true);
+
+                const numberSpan = document.createElement('span');
+                numberSpan.className = 'playlist-track-number text-gray-400 w-5 text-right font-mono';
+                numberSpan.textContent = `${index + 1}`;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'flex-grow';
+                nameSpan.textContent = trackData.type === 'local' ? trackData.file.name : trackData.name;
+
+                li.appendChild(numberSpan);
+                li.appendChild(nameSpan);
                 playlistElement.appendChild(li);
             });
             updateActivePlaylistItem();
@@ -470,7 +496,7 @@
             const newFiles = Array.from(e.target.files);
             if (newFiles.length === 0) return;
             playlist = newFiles.map(file => ({ type: 'local', name: file.name, file: file }));
-            localStorage.removeItem('audioPlayerState'); // Limpia estado al cargar locales
+            localStorage.removeItem('audioPlayerState');
             renderPlaylist();
             loadTrack(0, false);
             updateTheme(null);
@@ -492,6 +518,8 @@
     </script>
 </body>
 </html>
+
+   
 
     
 
