@@ -20,7 +20,8 @@
         /* Estilos de la lista de reproducción */
         .playlist-item:hover { background-color: rgba(255, 255, 255, 0.1); }
         .playlist-item.active { background-color: rgba(255, 255, 255, 0.2); }
-        .playlist-item.playing .playlist-track-number { color: #1DB954; /* Verde Spotify */ }
+        .playlist-item.playing .playlist-track-number,
+        .playlist-item.playing .track-name { color: #1DB954; /* Verde Spotify */ }
         .playlist-item .playing-indicator { display: none; }
         .playlist-item.playing .playing-indicator { display: block; }
 
@@ -269,7 +270,7 @@
                 
                 const audioFiles = files
                     .filter(file => file.type === 'file' && audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext)))
-                    .map(file => ({ type: 'remote', name: file.name.replace(/_/g, ' ').replace(/\.mp3|\.wav/gi, ''), src: file.download_url }));
+                    .map(file => ({ type: 'remote', name: file.name.replace(/_/g, ' ').replace(/\.mp3|\.wav/gi, ''), src: file.download_url, duration: '--:--' }));
 
                 const coverFile = files.find(file => imageExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
                 currentTopic.cover = coverFile ? coverFile.download_url : null;
@@ -277,19 +278,41 @@
 
                 if (audioFiles.length === 0) {
                     currentTrackTitle.textContent = "No hay audios en este tema.";
+                    playlist = [];
+                    renderPlaylist();
                 } else {
                     playlist = audioFiles;
+                    renderPlaylist(); // Renderiza la lista primero con duraciones placeholder
                     loadTrack(trackToLoad, false);
                     if (startTime > 0) {
                         audioPlayer.currentTime = startTime;
                     }
+                    // Ahora busca las duraciones
+                    fetchAllDurations();
                 }
             } catch (error) {
                 console.error("Error al cargar audios:", error);
                 currentTrackTitle.textContent = "Error al cargar audios.";
-            } finally {
-                renderPlaylist();
             }
+        }
+
+        function fetchAllDurations() {
+            playlist.forEach((track, index) => {
+                const durationElement = document.querySelector(`.playlist-item[data-index="${index}"] .track-duration`);
+                if(durationElement) {
+                    fetchTrackDuration(track.src, durationElement);
+                }
+            });
+        }
+
+        function fetchTrackDuration(src, element) {
+            const tempAudio = new Audio();
+            tempAudio.src = src;
+            tempAudio.addEventListener('loadedmetadata', () => {
+                if(isFinite(tempAudio.duration)) {
+                    element.textContent = formatTime(tempAudio.duration);
+                }
+            });
         }
         
         // --- Lógica de Estado y Compartir ---
@@ -332,6 +355,57 @@
             }
         }
         
+        async function shareCurrentTrack() {
+            if (currentTrackIndex === -1 || (playlist[0] && playlist[0].type === 'local')) {
+                showNotification("No se puede compartir esta pista");
+                return;
+            }
+            const trackName = playlist[currentTrackIndex].name;
+            const url = new URL(window.location.href.split('?')[0]);
+            url.searchParams.set('topic', currentTopic.path);
+            url.searchParams.set('track', currentTrackIndex);
+            const shareUrl = url.toString();
+
+            const shareData = {
+                title: `Estoy escuchando: ${currentTopic.name}`,
+                text: `Escucha "${trackName}" del tema "${currentTopic.name}"`,
+                url: shareUrl,
+            };
+
+            if (navigator.share) {
+                try {
+                    await navigator.share(shareData);
+                    return; 
+                } catch (err) {
+                    console.log("Web Share API no disponible o cancelada.", err);
+                }
+            }
+            
+            // Fallback to clipboard
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                showNotification("¡Enlace copiado al portapapeles!");
+            } catch (err) {
+                console.error("Fallo al copiar enlace. Usando método antiguo.", err);
+                const textArea = document.createElement("textarea");
+                textArea.value = shareUrl;
+                textArea.style.position = "fixed";
+                textArea.style.opacity = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showNotification("¡Enlace copiado al portapapeles!");
+                } catch (execErr) {
+                    showNotification("Error al copiar el enlace.");
+                    console.error("Fallo total al copiar:", execErr);
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+
+
         function showNotification(message) {
             notification.textContent = message;
             notification.classList.add('show');
@@ -449,7 +523,7 @@
         }
 
         function formatTime(seconds) {
-            if (isNaN(seconds)) return '00:00';
+            if (isNaN(seconds) || !isFinite(seconds)) return '--:--';
             const min = Math.floor(seconds / 60);
             const sec = Math.floor(seconds % 60);
             return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
@@ -475,16 +549,22 @@
                 numberSpan.textContent = `${index + 1}`;
                 
                 const nameSpan = document.createElement('span');
-                nameSpan.className = 'flex-grow';
-                nameSpan.textContent = trackData.type === 'local' ? trackData.file.name : trackData.name;
+                nameSpan.className = 'track-name flex-grow';
+                nameSpan.textContent = trackData.name;
 
                 const indicator = document.createElement('div');
-                indicator.className = 'playing-indicator ml-auto h-4 w-5 flex items-center justify-between';
+                indicator.className = 'playing-indicator h-4 w-5 flex items-center justify-between';
                 indicator.innerHTML = `<span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>`;
+
+                const durationSpan = document.createElement('span');
+                durationSpan.className = 'track-duration text-gray-400 font-mono';
+                durationSpan.textContent = trackData.duration || '--:--';
+
 
                 li.appendChild(numberSpan);
                 li.appendChild(nameSpan);
                 li.appendChild(indicator);
+                li.appendChild(durationSpan);
                 playlistElement.appendChild(li);
             });
             updatePlayingIndicator();
@@ -528,32 +608,6 @@
         document.addEventListener('DOMContentLoaded', loadTopicsFromRepo);
         loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
         shareBtn.addEventListener('click', shareCurrentTrack);
-
-     async function shareCurrentTrack() {
-        const shareUrl = window.location.href;
-
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: "Compartir app",
-                    text: "¡Mirá esta app para escuchar audios!",
-                    url: shareUrl
-                });
-                console.log("Compartido con Web Share API");
-                return;
-            } catch (err) {
-                console.warn("Compartir cancelado", err);
-            }
-        }
-
-        try {
-            await navigator.clipboard.writeText(shareUrl);
-            alert("Enlace copiado al portapapeles");
-        } catch (err) {
-            console.error("Error al copiar enlace", err);
-            alert("No se pudo copiar el enlace");
-        }
-    }
         
         fileInput.addEventListener('change', (e) => {
             const newFiles = Array.from(e.target.files);
@@ -586,6 +640,8 @@
     </script>
 </body>
 </html>
+
+   
 
    
 
