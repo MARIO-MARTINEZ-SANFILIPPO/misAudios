@@ -25,16 +25,26 @@
         .playlist-item.playing .playing-indicator { display: block; }
 
         /* Animación del ecualizador */
-        .playing-indicator .eq-bar { animation: play 1.2s infinite ease-in-out; background-color: #1DB954; width: 3px; height: 100%; transform-origin: bottom; }
+        .playing-indicator .eq-bar { animation: play 1.2s infinite ease-in-out; background-color: #1DB954; /* Verde Spotify */ width: 3px; height: 100%; transform-origin: bottom; }
         .playing-indicator .eq-bar:nth-child(2) { animation-delay: -1.0s; }
         .playing-indicator .eq-bar:nth-child(3) { animation-delay: -0.8s; }
         @keyframes play { 0% { transform: scaleY(0.1); } 20% { transform: scaleY(1); } 80% { transform: scaleY(0.1); } 100% { transform: scaleY(0.1); } }
 
         /* Estilos de las tarjetas de temas */
-        .topic-card { background-color: #27272a; } /* zinc-800 */
-        .topic-card:hover { background-color: ##1DB954; } /* zinc-700 */
-         topic-card.active { background-color: #1DB954; color: #fff; } 
-        .topic-card.active i { color: #fff; }
+        .topic-card { 
+            background-color: #27272a; /* zinc-800 */
+            border: 1px solid transparent; /* Para evitar saltos de layout */
+        }
+        .topic-card:hover { 
+            background-color: #3f3f46; /* zinc-700 */
+        }
+        .topic-card.active { 
+            background-color: #18181b; /* zinc-900 */
+            border-color: #6d28d9; /* violet-700 */
+        }
+        .topic-card.active i, .topic-card.active span { 
+            color: #fff; 
+        }
 
         #player-container { transition: background 0.8s ease; }
         
@@ -200,7 +210,7 @@
                     topics.forEach(topic => {
                         const card = document.createElement('button');
                         const topicName = topic.name.replace(/_/g, ' ');
-                        card.className = 'topic-card rounded-lg p-3 text-left w-full flex items-center gap-4 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500';
+                        card.className = 'topic-card rounded-lg p-3 text-left w-full flex items-center gap-4 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-violet-500';
                         card.dataset.path = topic.path;
                         card.onclick = () => {
                             document.querySelectorAll('.topic-card').forEach(c => c.classList.remove('active'));
@@ -533,6 +543,7 @@
         
         function updatePlayingIndicator() {
             document.querySelectorAll('.playlist-item').forEach((item, idx) => {
+                item.classList.toggle('active', idx === currentTrackIndex);
                 item.classList.toggle('playing', idx === currentTrackIndex && isPlaying);
             });
         }
@@ -588,6 +599,9 @@
             totalDurationDisplay.textContent = formatTime(audioPlayer.duration);
         });
         audioPlayer.addEventListener('ended', nextTrack);
+        audioPlayer.addEventListener('play', updatePlayingIndicator);
+        audioPlayer.addEventListener('pause', updatePlayingIndicator);
+
         progressBarContainer.addEventListener('click', setProgress);
         volumeSlider.addEventListener('input', (e) => setVolume(e.target.value / 100));
         volumeIconBtn.addEventListener('click', toggleMute);
@@ -597,6 +611,8 @@
     </script>
 </body>
 </html>
+
+   
 
   
    
