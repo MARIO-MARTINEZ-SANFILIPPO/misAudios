@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -51,13 +51,8 @@
         /* Estilos de Transcripción */
         #transcriptionContainer { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out; }
         #transcriptionContainer.open { max-height: 200px; padding-top: 1rem; padding-bottom: 1rem; }
-        #transcriptionContent { white-space: pre-wrap; word-wrap: break-word; }
-
-        /* Estilo para el interruptor de filtro */
-        #transcriptToggle { appearance: none; width: 40px; height: 20px; background-color: #3f3f46; border-radius: 10px; position: relative; cursor: pointer; transition: background-color 0.2s ease-in-out; }
-        #transcriptToggle::before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background-color: white; top: 2px; left: 2px; transition: transform 0.2s ease-in-out; }
-        #transcriptToggle:checked { background-color: #1DB954; }
-        #transcriptToggle:checked::before { transform: translateX(20px); }
+        .lyrics-line { padding: 4px 8px; border-radius: 4px; transition: background-color 0.3s, color 0.3s; color: #a1a1aa; /* zinc-400 */ }
+        .lyrics-line.highlight { background-color: rgba(255, 255, 255, 0.1); color: #fff; }
 
     </style>
 </head>
@@ -121,19 +116,15 @@
                 </div>
             </div>
             
-            <div class="flex justify-between items-center mb-2">
-                <h2 class="text-lg font-semibold">Lista de Reproducción</h2>
-                <div class="flex items-center space-x-2 text-sm text-gray-400">
-                </div>
-            </div>
+            <h2 class="text-lg font-semibold mb-2">Lista de Reproducción</h2>
             <div id="playlist" class="max-h-48 overflow-y-auto rounded-lg p-1">
                 <p id="emptyPlaylist" class="text-gray-400 text-center py-4">Selecciona un tema para ver los audios.</p>
             </div>
 
             <!-- Panel de Transcripción -->
             <div id="transcriptionContainer" class="px-2">
-                 <h2 class="text-lg font-semibold mb-2">Transcripción</h2>
-                 <div id="transcriptionContent" class="text-sm text-gray-300 bg-black/30 p-4 rounded-lg max-h-40 overflow-y-auto">
+                 <h2 class="text-lg font-semibold mb-2">Transcripción Sincronizada</h2>
+                 <div id="transcriptionContent" class="text-sm text-gray-300 bg-black/30 p-2 rounded-lg max-h-40 overflow-y-auto">
                      <p id="transcriptPlaceholder">La transcripción aparecerá aquí.</p>
                  </div>
             </div>
@@ -163,7 +154,6 @@
         const transcriptionContainer = document.getElementById('transcriptionContainer');
         const transcriptionContent = document.getElementById('transcriptionContent');
         const transcriptPlaceholder = document.getElementById('transcriptPlaceholder');
-        const transcriptToggle = document.getElementById('transcriptToggle');
         const notification = document.getElementById('notification');
         const currentTimeDisplay = document.getElementById('currentTime');
         const totalDurationDisplay = document.getElementById('totalDuration');
@@ -179,8 +169,8 @@
         const volumeSlider = document.getElementById('volumeSlider');
 
         // --- Estado de la App ---
-        let fullPlaylist = []; // Almacena la lista completa sin filtrar
-        let playlist = []; // Almacena la lista que se muestra (puede estar filtrada)
+        let playlist = [];
+        let currentLyrics = [];
         let currentTopic = { name: '', path: '', cover: null };
         let currentTrackIndex = -1;
         let isPlaying = false;
@@ -261,13 +251,13 @@
             }
 
             currentTrackTitle.textContent = 'Cargando audios...';
-            fullPlaylist = [];
             playlist = [];
             renderPlaylist();
 
             const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${topicPath}`;
             const audioExtensions = ['.wav', '.mp3', '.ogg', '.flac', '.m4a'];
             const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+            const transcriptExtension = '.lrc';
 
             try {
                 const response = await fetch(apiUrl);
@@ -275,7 +265,7 @@
                 const files = await response.json();
                 
                 const audioFilesData = files.filter(file => file.type === 'file' && audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
-                const transcriptFiles = files.filter(file => file.name.toLowerCase().endsWith('.txt'));
+                const transcriptFiles = files.filter(file => file.name.toLowerCase().endsWith(transcriptExtension));
 
                 const audioFiles = audioFilesData.map(file => {
                     const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
@@ -296,36 +286,28 @@
 
                 if (audioFiles.length === 0) {
                     currentTrackTitle.textContent = "No hay audios en este tema.";
+                    playlist = [];
                 } else {
-                    fullPlaylist = audioFiles;
-                    applyFilterAndRenderPlaylist();
+                    playlist = audioFiles;
                     loadTrack(trackToLoad, false);
                     if (startTime > 0) {
                         audioPlayer.currentTime = startTime;
                     }
-                    fetchAllDurations();
                 }
             } catch (error) {
                 console.error("Error al cargar audios:", error);
                 currentTrackTitle.textContent = "Error al cargar audios.";
+            } finally {
+                renderPlaylist();
+                fetchAllDurations();
             }
-        }
-
-        function applyFilterAndRenderPlaylist() {
-            if (transcriptToggle.checked) {
-                playlist = fullPlaylist.filter(track => track.transcriptUrl);
-            } else {
-                playlist = fullPlaylist;
-            }
-            renderPlaylist();
         }
 
         function fetchAllDurations() {
             playlist.forEach((track, index) => {
-                const listItem = document.querySelector(`.playlist-item[data-real-index="${index}"]`);
+                const listItem = document.querySelector(`.playlist-item[data-index="${index}"] .track-duration`);
                 if(listItem) {
-                    const durationElement = listItem.querySelector('.track-duration');
-                    fetchTrackDuration(track.src, durationElement);
+                    fetchTrackDuration(track.src, listItem);
                 }
             });
         }
@@ -341,26 +323,89 @@
         }
         
         async function loadTranscription(url) {
+            transcriptionContent.innerHTML = '';
             transcriptPlaceholder.textContent = 'Cargando transcripción...';
+            transcriptionContent.appendChild(transcriptPlaceholder);
             transcriptBtn.disabled = true;
+            currentLyrics = [];
+
             if (!url) {
                 transcriptPlaceholder.textContent = 'Transcripción no disponible para esta pista.';
-                transcriptBtn.disabled = true;
                 return;
             }
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('No se pudo cargar la transcripción.');
-                const text = await response.text();
-                transcriptionContent.textContent = text;
-                transcriptBtn.disabled = false;
+                const lrcText = await response.text();
+                currentLyrics = parseLRC(lrcText);
+
+                if (currentLyrics.length > 0) {
+                    transcriptionContent.innerHTML = ''; // Limpia el placeholder
+                    currentLyrics.forEach((line, index) => {
+                        const p = document.createElement('p');
+                        p.textContent = line.text;
+                        p.className = 'lyrics-line';
+                        p.dataset.index = index;
+                        transcriptionContent.appendChild(p);
+                    });
+                    transcriptBtn.disabled = false;
+                } else {
+                     transcriptPlaceholder.textContent = 'Formato de transcripción inválido o vacío.';
+                }
             } catch(error) {
                 console.error(error);
                 transcriptPlaceholder.textContent = 'Error al cargar la transcripción.';
-                transcriptBtn.disabled = true;
             }
         }
 
+        function parseLRC(lrc) {
+            const lines = lrc.split('\n');
+            const lyrics = [];
+            const regex = /\[(\d{2}):(\d{2})\.?(\d{2,3})?\](.*)/;
+            
+            for (const line of lines) {
+                const match = line.match(regex);
+                if (match) {
+                    const min = parseInt(match[1], 10);
+                    const sec = parseInt(match[2], 10);
+                    const ms = parseInt(match[3] || '0', 10);
+                    const text = match[4].trim();
+                    const time = min * 60 + sec + ms / 1000;
+                    lyrics.push({ time, text });
+                }
+            }
+            return lyrics;
+        }
+
+        function highlightCurrentLyric() {
+            if (!currentLyrics.length) return;
+
+            let currentIndex = -1;
+            for (let i = 0; i < currentLyrics.length; i++) {
+                if (audioPlayer.currentTime > currentLyrics[i].time) {
+                    currentIndex = i;
+                } else {
+                    break;
+                }
+            }
+            
+            if (currentIndex > -1) {
+                 const allLines = transcriptionContent.querySelectorAll('.lyrics-line');
+                 allLines.forEach(line => line.classList.remove('highlight'));
+                 
+                 const currentLine = transcriptionContent.querySelector(`.lyrics-line[data-index="${currentIndex}"]`);
+                 if(currentLine) {
+                     currentLine.classList.add('highlight');
+                     // Solo desplazar si el elemento no está visible
+                     const containerRect = transcriptionContent.getBoundingClientRect();
+                     const lineRect = currentLine.getBoundingClientRect();
+                     if (lineRect.top < containerRect.top || lineRect.bottom > containerRect.bottom) {
+                        currentLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     }
+                 }
+            }
+        }
+        
         // --- Lógica de Estado y Compartir ---
 
         function saveState() {
@@ -427,7 +472,6 @@
                 }
             }
             
-            // Fallback to clipboard
             try {
                 await navigator.clipboard.writeText(shareUrl);
                 showNotification("¡Enlace copiado al portapapeles!");
@@ -535,6 +579,7 @@
             if (audioPlayer.duration && isFinite(audioPlayer.duration)) {
                 progressBar.style.width = `${(audioPlayer.currentTime / audioPlayer.duration) * 100}%`;
                 currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+                highlightCurrentLyric();
                 if (++timeUpdateCounter > 5) {
                     saveState();
                     timeUpdateCounter = 0;
@@ -579,19 +624,18 @@
         function renderPlaylist() {
             playlistElement.innerHTML = '';
             if (playlist.length === 0) {
+                emptyPlaylistMessage.textContent = 'No hay audios en este tema.';
                 playlistElement.appendChild(emptyPlaylistMessage);
                 disableControls();
                 return;
             }
             enableControls();
             if(document.body.contains(emptyPlaylistMessage)) emptyPlaylistMessage.remove();
+            
             playlist.forEach((trackData, index) => {
                 const li = document.createElement('li');
                 li.className = 'playlist-item p-3 rounded-lg cursor-pointer text-sm flex items-center gap-4';
                 li.dataset.index = index;
-                // Guardamos el índice real de la lista completa para poder buscar duraciones
-                const realIndex = fullPlaylist.findIndex(track => track.src === trackData.src);
-                li.dataset.realIndex = realIndex;
                 li.onclick = () => loadTrack(index, true);
 
                 const numberSpan = document.createElement('span');
@@ -662,7 +706,6 @@
         loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
         shareBtn.addEventListener('click', shareCurrentTrack);
         transcriptBtn.addEventListener('click', () => transcriptionContainer.classList.toggle('open'));
-        transcriptToggle.addEventListener('change', applyFilterAndRenderPlaylist);
         
         fileInput.addEventListener('change', (e) => {
             const newFiles = Array.from(e.target.files);
@@ -696,6 +739,8 @@
     </script>
 </body>
 </html>
+
+   
 
 
    
