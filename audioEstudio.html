@@ -6,9 +6,9 @@
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Iconos Phosphor -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Color Thief para extraer colores de las imágenes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
     <style>
@@ -22,6 +22,24 @@
         .topic-btn:hover { background-color: #4b5563; }
         .topic-btn.active { background-color: #fff; color: #111827; }
         #player-container { transition: background 0.8s ease; }
+        #notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #fff;
+            color: #111;
+            padding: 10px 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+        }
+        #notification.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-10px);
+        }
     </style>
 </head>
 <body class="bg-black text-white flex items-center justify-center min-h-screen p-4">
@@ -53,9 +71,11 @@
             </div>
 
             <div class="flex items-center justify-center space-x-6 mt-4">
+                <button id="shareBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Compartir"><i class="ph-fill ph-share-network text-2xl"></i></button>
                 <button id="prevBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
                 <button id="playPauseBtn" class="bg-white text-black w-16 h-16 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-200 transition-colors disabled:opacity-50"><i id="playIcon" class="ph-fill ph-play text-4xl ml-1"></i><i id="pauseIcon" class="ph-fill ph-pause text-4xl hidden"></i></button>
                 <button id="nextBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
+                 <div class="w-8"></div> <!-- Espaciador para simetría -->
             </div>
         </div>
 
@@ -84,6 +104,8 @@
             </div>
         </div>
     </div>
+    
+    <div id="notification"></div>
 
     <script>
         // --- Referencias al DOM ---
@@ -101,7 +123,8 @@
         const currentTrackTitle = document.getElementById('currentTrackTitle');
         const albumArt = document.getElementById('albumArt');
         const albumArtPlaceholder = document.getElementById('albumArtPlaceholder');
-        // ... resto de referencias al DOM
+        const shareBtn = document.getElementById('shareBtn');
+        const notification = document.getElementById('notification');
         const currentTimeDisplay = document.getElementById('currentTime');
         const totalDurationDisplay = document.getElementById('totalDuration');
         const playPauseBtn = document.getElementById('playPauseBtn');
@@ -114,9 +137,10 @@
 
         // --- Estado de la App ---
         let playlist = [];
-        let currentTopic = { name: '', cover: null };
+        let currentTopic = { name: '', path: '', cover: null };
         let currentTrackIndex = -1;
         let isPlaying = false;
+        let timeUpdateCounter = 0;
         
         // --- CONFIGURACIÓN DE GITHUB ---
         const GITHUB_USER = "MARIO-MARTINEZ-SANFILIPPO";
@@ -149,16 +173,17 @@
                         const topicName = topic.name.replace(/_/g, ' ');
                         button.textContent = topicName;
                         button.className = 'topic-btn text-sm font-medium py-2 px-3 rounded-lg transition-colors';
+                        button.dataset.path = topic.path;
                         button.onclick = () => {
                             document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
                             button.classList.add('active');
                             currentTopic.name = topicName;
+                            currentTopic.path = topic.path;
                             loadAudiosFromTopic(topic.path);
                         };
                         topicsList.appendChild(button);
                     });
-                     topicTitle.textContent = "Selector de Clases";
-                     currentTrackTitle.textContent = "Selecciona un tema";
+                     checkInitialState();
                 } else {
                     emptyTopics.textContent = "No se encontraron temas (carpetas) en la ruta especificada.";
                 }
@@ -171,8 +196,16 @@
             }
         }
         
-        async function loadAudiosFromTopic(topicPath) {
-            topicTitle.textContent = currentTopic.name;
+        async function loadAudiosFromTopic(topicPath, trackToLoad = 0, startTime = 0) {
+            const topicButton = document.querySelector(`.topic-btn[data-path="${topicPath}"]`);
+            if (topicButton) {
+                 document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
+                 topicButton.classList.add('active');
+                 currentTopic.name = topicButton.textContent;
+                 currentTopic.path = topicPath;
+                 topicTitle.textContent = currentTopic.name;
+            }
+
             currentTrackTitle.textContent = 'Cargando audios...';
             playlist = [];
             renderPlaylist();
@@ -198,7 +231,10 @@
                     currentTrackTitle.textContent = "No hay audios en este tema.";
                 } else {
                     playlist = audioFiles;
-                    loadTrack(0, false);
+                    loadTrack(trackToLoad, false);
+                    if (startTime > 0) {
+                        audioPlayer.currentTime = startTime;
+                    }
                 }
             } catch (error) {
                 console.error("Error al cargar audios:", error);
@@ -207,10 +243,84 @@
                 renderPlaylist();
             }
         }
+        
+        // --- Lógica de Estado y Compartir ---
+
+        function saveState() {
+             if (playlist.length === 0 || playlist[0].type === 'local') return;
+             const state = {
+                 topicPath: currentTopic.path,
+                 trackIndex: currentTrackIndex,
+                 time: audioPlayer.currentTime
+             };
+             localStorage.setItem('audioPlayerState', JSON.stringify(state));
+        }
+
+        function checkInitialState() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const topicParam = urlParams.get('topic');
+            const trackParam = urlParams.get('track');
+
+            if (topicParam) {
+                loadAudiosFromTopic(topicParam, parseInt(trackParam || 0));
+                // Limpia la URL para que no se recargue lo mismo al refrescar
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return;
+            }
+            
+            const savedState = localStorage.getItem('audioPlayerState');
+            if (savedState) {
+                const { topicPath, trackIndex, time } = JSON.parse(savedState);
+                if (topicPath) {
+                    loadAudiosFromTopic(topicPath, trackIndex, time);
+                }
+            } else {
+                 topicTitle.textContent = "Selector de Clases";
+                 currentTrackTitle.textContent = "Selecciona un tema";
+            }
+        }
+        
+        async function shareCurrentTrack() {
+            if (currentTrackIndex === -1 || playlist[0].type === 'local') {
+                showNotification("No se puede compartir esta pista");
+                return;
+            }
+            const trackName = playlist[currentTrackIndex].name;
+            const url = new URL(window.location);
+            url.searchParams.set('topic', currentTopic.path);
+            url.searchParams.set('track', currentTrackIndex);
+            
+            const shareData = {
+                title: `Estoy escuchando: ${currentTopic.name}`,
+                text: `Escucha "${trackName}" del tema "${currentTopic.name}"`,
+                url: url.toString(),
+            };
+            
+            try {
+                if (navigator.share) {
+                    await navigator.share(shareData);
+                } else {
+                    throw new Error('Web Share API not supported');
+                }
+            } catch (err) {
+                navigator.clipboard.writeText(url.toString());
+                showNotification("¡Enlace copiado al portapapeles!");
+            }
+        }
+
+        function showNotification(message) {
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Lógica del Reproductor ---
 
         function updateTheme(imageUrl) {
             if (!imageUrl) {
-                playerContainer.style.background = ''; // Vuelve al color por defecto de la clase CSS
+                playerContainer.style.background = '';
                 albumArt.classList.add('hidden');
                 albumArtPlaceholder.classList.remove('hidden');
                 return;
@@ -224,23 +334,22 @@
             const img = new Image();
             img.crossOrigin = 'Anonymous';
             img.src = imageUrl;
-
             img.onload = () => {
                 const color = colorThief.getColor(img);
                 playerContainer.style.background = `linear-gradient(to bottom, rgb(${color[0]}, ${color[1]}, ${color[2]}) 0%, #111827 50%)`;
             };
-            img.onerror = () => {
-                 playerContainer.style.background = '';
-            }
+            img.onerror = () => { playerContainer.style.background = ''; };
         }
-
-        // --- Lógica del Reproductor ---
 
         function loadTrack(index, shouldPlay = false) {
             if (index < 0 || index >= playlist.length) return;
             currentTrackIndex = index;
             const trackData = playlist[index];
-            audioPlayer.src = trackData.src;
+            if (trackData.type === 'local') {
+                 audioPlayer.src = URL.createObjectURL(trackData.file);
+            } else {
+                 audioPlayer.src = trackData.src;
+            }
             currentTrackTitle.textContent = trackData.name;
             updateActivePlaylistItem();
             if (shouldPlay) playAudio();
@@ -279,6 +388,11 @@
             if (audioPlayer.duration && isFinite(audioPlayer.duration)) {
                 progressBar.style.width = `${(audioPlayer.currentTime / audioPlayer.duration) * 100}%`;
                 currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+                // Guarda el estado cada ~5 segundos
+                if (++timeUpdateCounter > 5) {
+                    saveState();
+                    timeUpdateCounter = 0;
+                }
             }
         }
         
@@ -306,7 +420,7 @@
             playlist.forEach((trackData, index) => {
                 const li = document.createElement('li');
                 li.className = 'playlist-item p-3 rounded-md cursor-pointer text-sm';
-                li.textContent = trackData.name;
+                li.textContent = trackData.type === 'local' ? trackData.file.name : trackData.name;
                 li.dataset.index = index;
                 li.onclick = () => loadTrack(index, true);
                 playlistElement.appendChild(li);
@@ -324,12 +438,14 @@
             playPauseBtn.disabled = true;
             nextBtn.disabled = true;
             prevBtn.disabled = true;
+            shareBtn.disabled = true;
         }
         
         function enableControls() {
              playPauseBtn.disabled = false;
              nextBtn.disabled = false;
              prevBtn.disabled = false;
+             shareBtn.disabled = playlist.length > 0 && playlist[0].type !== 'local';
         }
 
         function setLoadingState(button, isLoading, loadingText) {
@@ -348,14 +464,16 @@
         // --- Event Listeners ---
         document.addEventListener('DOMContentLoaded', loadTopicsFromRepo);
         loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
+        shareBtn.addEventListener('click', shareCurrentTrack);
         
         fileInput.addEventListener('change', (e) => {
             const newFiles = Array.from(e.target.files);
             if (newFiles.length === 0) return;
             playlist = newFiles.map(file => ({ type: 'local', name: file.name, file: file }));
+            localStorage.removeItem('audioPlayerState'); // Limpia estado al cargar locales
             renderPlaylist();
             loadTrack(0, false);
-            updateTheme(null); // Resetea el tema al cargar locales
+            updateTheme(null);
             topicTitle.textContent = "Archivos Locales";
         });
         
@@ -374,6 +492,8 @@
     </script>
 </body>
 </html>
+
+    
 
   
 
