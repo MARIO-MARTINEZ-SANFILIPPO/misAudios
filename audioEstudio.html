@@ -6,9 +6,9 @@
     <title>Reproductor de Audio para Estudiar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <!-- Iconos Phosphor -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-	<script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
     <style>
         .progress-bar-container:hover .progress-bar-thumb { opacity: 1; }
         input[type="file"] { display: none; }
@@ -105,10 +105,11 @@
         let isPlaying = false;
         
         // --- CONFIGURACIÓN DE GITHUB ---
-        // IMPORTANTE: Reemplaza estos valores con los de tu repositorio.
-        const GITHUB_USER = "MARIO-MARTINEZ-SANFILIPPO"; // Ejemplo: "octocat"
-        const GITHUB_REPO = "misAudios";       // Ejemplo: "Spoon-Knife"
-        const AUDIO_PATH = "AUDIOS";                // La carpeta principal que contiene las subcarpetas de temas
+        // Se han rellenado los valores con la información de tu error.
+        // Asegúrate de que el repositorio sea público.
+        const GITHUB_USER = "MARIO-MARTINEZ-SANFILIPPO";
+        const GITHUB_REPO = "misAudios";
+        const AUDIO_PATH = "AUDIOS"; // La carpeta principal que contiene las subcarpetas de temas
 
         // --- Lógica Principal ---
         
@@ -123,19 +124,23 @@
             
             try {
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
+                if (response.status === 404) {
+                    throw new Error(`Repositorio o carpeta no encontrada. Revisa la configuración del script (usuario: ${GITHUB_USER}, repo: ${GITHUB_REPO}, carpeta: ${AUDIO_PATH})`);
+                }
+                if (!response.ok) {
+                    throw new Error(`Error de red: ${response.statusText}`);
+                }
                 const items = await response.json();
                 
                 const topics = items.filter(item => item.type === 'dir');
                 
                 if (topics.length > 0) {
-                    emptyTopics.remove();
+                    if(document.body.contains(emptyTopics)) emptyTopics.remove();
                     topics.forEach(topic => {
                         const button = document.createElement('button');
                         button.textContent = topic.name;
                         button.className = 'topic-btn text-sm font-medium py-2 px-3 rounded-lg transition-colors';
                         button.onclick = () => {
-                            // Marca el botón activo y carga los audios
                             document.querySelectorAll('.topic-btn').forEach(btn => btn.classList.remove('active'));
                             button.classList.add('active');
                             loadAudiosFromTopic(topic.path);
@@ -143,13 +148,13 @@
                         topicsList.appendChild(button);
                     });
                 } else {
-                    topicsList.appendChild(emptyTopics);
                     emptyTopics.textContent = "No se encontraron temas en el repositorio.";
+                    topicsList.appendChild(emptyTopics);
                 }
 
             } catch (error) {
                 console.error("Error al cargar temas desde GitHub:", error);
-                emptyTopics.textContent = "Error al cargar temas.";
+                emptyTopics.textContent = error.message;
                 topicsList.appendChild(emptyTopics);
             } finally {
                 setLoadingState(loadTopicsBtn, false, "Cargar Temas desde Repo");
@@ -192,7 +197,7 @@
         }
 
 
-        // --- Lógica del Reproductor (sin cambios) ---
+        // --- Lógica del Reproductor ---
 
         function loadTrack(index, shouldPlay = false) {
             if (index < 0 || index >= playlist.length) return;
@@ -267,7 +272,7 @@
                 return;
             }
             enableControls();
-            emptyPlaylistMessage.remove();
+            if(document.body.contains(emptyPlaylistMessage)) emptyPlaylistMessage.remove();
             playlist.forEach((trackData, index) => {
                 const li = document.createElement('li');
                 li.className = 'playlist-item p-3 rounded-md cursor-pointer';
@@ -338,3 +343,6 @@
     </script>
 </body>
 </html>
+
+   
+
