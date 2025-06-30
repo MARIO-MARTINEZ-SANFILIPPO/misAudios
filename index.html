@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reproductor de Audio para Estudiar</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
+    <!-- Iconos Phosphor -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Color Thief para extraer colores de las imágenes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
+    <style>
+        .progress-bar-container:hover .progress-bar-thumb { opacity: 1; }
+        input[type="file"] { display: none; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Estilos de la lista de reproducción */
+        .playlist-item:hover { background-color: rgba(255, 255, 255, 0.1); }
+        .playlist-item.active { background-color: rgba(255, 255, 255, 0.2); }
+        .playlist-item.playing .playlist-track-number,
+        .playlist-item.playing .track-name { color: #1DB954; /* Verde Spotify */ }
+        .playlist-item .playing-indicator { display: none; }
+        .playlist-item.playing .playing-indicator { display: block; }
+
+        /* Animación del ecualizador */
+        .playing-indicator .eq-bar { animation: play 1.2s infinite ease-in-out; background-color: #1DB954; width: 3px; height: 100%; transform-origin: bottom; }
+        .playing-indicator .eq-bar:nth-child(2) { animation-delay: -1.0s; }
+        .playing-indicator .eq-bar:nth-child(3) { animation-delay: -0.8s; }
+        @keyframes play { 0% { transform: scaleY(0.1); } 20% { transform: scaleY(1); } 80% { transform: scaleY(0.1); } 100% { transform: scaleY(0.1); } }
+
+        /* Estilos de las tarjetas de temas */
+        .topic-card { background-color: #27272a; border: 1px solid transparent; }
+        .topic-card:hover { background-color: #3f3f46; }
+        .topic-card.active { background-color: #18181b; border-color: #6d28d9; }
+        .topic-card.active i, .topic-card.active span { color: #fff; }
+
+        #player-container { transition: background 0.8s ease; }
+        
+        /* Notificación */
+        #notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #fff; color: #111; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease; pointer-events: none; }
+        #notification.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+
+        /* Estilos del slider de volumen */
+        #volumeSlider { -webkit-appearance: none; appearance: none; width: 100%; height: 5px; background: rgba(255, 255, 255, 0.3); border-radius: 5px; outline: none; transition: opacity 0.2s; }
+        #volumeSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; background: #fff; cursor: pointer; border-radius: 50%; }
+        #volumeSlider::-moz-range-thumb { width: 14px; height: 14px; background: #fff; cursor: pointer; border-radius: 50%; }
+        
+        /* Estilos de Transcripción */
+        #transcriptionContainer { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out; }
+        #transcriptionContainer.open { max-height: 200px; padding-top: 1rem; padding-bottom: 1rem; }
+        #transcriptionContent { white-space: pre-wrap; word-wrap: break-word; }
+
+    </style>
+</head>
+<body class="bg-black text-white flex items-center justify-center min-h-screen p-4">
+
+    <div id="player-container" class="w-full max-w-lg mx-auto bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
+        
+        <audio id="audioPlayer" crossOrigin="anonymous"></audio>
+
+        <!-- Cabecera y Controles Principales -->
+        <div class="p-6 bg-transparent">
+            <div id="albumArtContainer" class="w-32 h-32 mx-auto mb-4 rounded-lg shadow-lg overflow-hidden flex items-center justify-center bg-gray-800">
+                <img id="albumArt" src="" alt="Carátula del Tema" class="w-full h-full object-cover hidden">
+                <i id="albumArtPlaceholder" class="ph-fill ph-music-notes text-4xl text-gray-500"></i>
+            </div>
+
+            <h1 id="topicTitle" class="text-2xl font-bold text-center mb-1">Selector de Clases</h1>
+            <p id="currentTrackTitle" class="text-center text-gray-300 font-medium truncate h-6">Selecciona un tema para empezar</p>
+            
+            <div class="mt-6">
+                <div id="progressBarContainer" class="progress-bar-container bg-white/20 rounded-full h-2 cursor-pointer">
+                    <div id="progressBar" class="bg-white h-2 rounded-full relative">
+                        <div class="progress-bar-thumb w-4 h-4 bg-white rounded-full absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 opacity-0 transition-opacity ring-2 ring-gray-900"></div>
+                    </div>
+                </div>
+                <div class="flex justify-between text-xs font-mono text-gray-300 mt-2">
+                    <span id="currentTime">00:00</span>
+                    <span id="totalDuration">00:00</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-center space-x-2 sm:space-x-4 mt-4">
+                 <button id="transcriptBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Transcripción"><i class="ph-fill ph-text-align-left text-2xl"></i></button>
+                <button id="prevBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
+                <button id="playPauseBtn" class="bg-white text-black w-16 h-16 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-200 transition-colors disabled:opacity-50"><i id="playIcon" class="ph-fill ph-play text-4xl ml-1"></i><i id="pauseIcon" class="ph-fill ph-pause text-4xl hidden"></i></button>
+                <button id="nextBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
+                <button id="shareBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Compartir"><i class="ph-fill ph-share-network text-2xl"></i></button>
+            </div>
+        </div>
+
+        <!-- Opciones de Carga, Temas y Lista de Reproducción -->
+        <div class="p-6 bg-black/20 backdrop-blur-sm">
+             <div class="grid sm:grid-cols-2 gap-4 mb-4">
+                 <button id="loadTopicsBtn" class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors">
+                    <i id="repoIcon" class="ph-fill ph-arrow-clockwise mr-2"></i><span id="repoBtnText">Recargar Temas</span>
+                </button>
+                <label for="fileInput" class="w-full cursor-pointer bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors">
+                    <i class="ph-fill ph-upload-simple mr-2"></i><span>Cargar Locales</span>
+                </label>
+             </div>
+             <div class="flex items-center gap-2 group w-full my-4"> <!-- Contenedor de Volumen -->
+                    <button id="volumeIconBtn"><i id="volumeIcon" class="ph-fill ph-speaker-high text-2xl text-gray-300 group-hover:text-white"></i></button>
+                    <input id="volumeSlider" type="range" min="0" max="100" value="100" class="w-full">
+                </div>
+            <input type="file" id="fileInput" multiple accept="audio/*">
+            
+            <div id="topicsContainer" class="mb-4">
+                <h2 class="text-lg font-semibold mb-2">Temas</h2>
+                <div id="topicsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     <p id="emptyTopics" class="text-gray-500 text-sm col-span-full">Cargando temas desde GitHub...</p>
+                </div>
+            </div>
+            
+            <h2 class="text-lg font-semibold mb-2">Lista de Reproducción</h2>
+            <div id="playlist" class="max-h-48 overflow-y-auto rounded-lg p-1">
+                <p id="emptyPlaylist" class="text-gray-400 text-center py-4">Selecciona un tema para ver los audios.</p>
+            </div>
+
+            <!-- Panel de Transcripción -->
+            <div id="transcriptionContainer" class="px-2">
+                 <h2 class="text-lg font-semibold mb-2">Transcripción</h2>
+                 <div id="transcriptionContent" class="text-sm text-gray-300 bg-black/30 p-2 rounded-lg max-h-40 overflow-y-auto">
+                     <p id="transcriptPlaceholder">La transcripción aparecerá aquí.</p>
+                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="notification"></div>
+
+    <script>
+        // --- Referencias al DOM ---
+        const playerContainer = document.getElementById('player-container');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const fileInput = document.getElementById('fileInput');
+        const loadTopicsBtn = document.getElementById('loadTopicsBtn');
+        const repoIcon = document.getElementById('repoIcon');
+        const repoBtnText = document.getElementById('repoBtnText');
+        const playlistElement = document.getElementById('playlist');
+        const emptyPlaylistMessage = document.getElementById('emptyPlaylist');
+        const topicsList = document.getElementById('topicsList');
+        const emptyTopics = document.getElementById('emptyTopics');
+        const topicTitle = document.getElementById('topicTitle');
+        const currentTrackTitle = document.getElementById('currentTrackTitle');
+        const albumArt = document.getElementById('albumArt');
+        const albumArtPlaceholder = document.getElementById('albumArtPlaceholder');
+        const shareBtn = document.getElementById('shareBtn');
+        const transcriptBtn = document.getElementById('transcriptBtn');
+        const transcriptionContainer = document.getElementById('transcriptionContainer');
+        const transcriptionContent = document.getElementById('transcriptionContent');
+        const transcriptPlaceholder = document.getElementById('transcriptPlaceholder');
+        const notification = document.getElementById('notification');
+        const currentTimeDisplay = document.getElementById('currentTime');
+        const totalDurationDisplay = document.getElementById('totalDuration');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const playIcon = document.getElementById('playIcon');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const nextBtn = document.getElementById('nextBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+        const volumeIconBtn = document.getElementById('volumeIconBtn');
+        const volumeIcon = document.getElementById('volumeIcon');
+        const volumeSlider = document.getElementById('volumeSlider');
+
+        // --- Estado de la App ---
+        let playlist = [];
+        let currentTopic = { name: '', path: '', cover: null };
+        let currentTrackIndex = -1;
+        let isPlaying = false;
+        let timeUpdateCounter = 0;
+        let lastVolume = 1;
+        
+        // --- CONFIGURACIÓN DE GITHUB ---
+        const GITHUB_USER = "MARIO-MARTINEZ-SANFILIPPO";
+        const GITHUB_REPO = "misAudios";
+        const AUDIO_PATH = "AUDIOS";
+
+        // --- Lógica Principal ---
+        
+        async function loadTopicsFromRepo() {
+            setLoadingState(loadTopicsBtn, true, "Cargando...");
+            topicsList.innerHTML = ''; 
+            emptyTopics.textContent = "Cargando temas desde GitHub...";
+            topicsList.appendChild(emptyTopics);
+
+            const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${AUDIO_PATH}`;
+            
+            try {
+                const response = await fetch(apiUrl);
+                if (response.status === 404) throw new Error(`Carpeta no encontrada. Revisa si el repositorio es PÚBLICO y la ruta es correcta.`);
+                if (response.status === 403) throw new Error(`Límite de la API de GitHub alcanzado. Intenta de nuevo más tarde.`);
+                if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
+                const items = await response.json();
+                
+                const topics = items.filter(item => item.type === 'dir');
+                
+                if (topics.length > 0) {
+                    if(document.body.contains(emptyTopics)) emptyTopics.remove();
+                    topics.forEach(topic => {
+                        const card = document.createElement('button');
+                        const topicName = topic.name.replace(/_/g, ' ');
+                        card.className = 'topic-card rounded-lg p-3 text-left w-full flex items-center gap-4 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-violet-500';
+                        card.dataset.path = topic.path;
+                        card.onclick = () => {
+                            document.querySelectorAll('.topic-card').forEach(c => c.classList.remove('active'));
+                            card.classList.add('active');
+                            currentTopic.name = topicName;
+                            currentTopic.path = topic.path;
+                            loadAudiosFromTopic(topic.path);
+                        };
+
+                        const icon = document.createElement('i');
+                        icon.className = 'ph-fill ph-folder-simple text-3xl text-gray-400';
+
+                        const textSpan = document.createElement('span');
+                        textSpan.className = 'font-semibold flex-grow';
+                        textSpan.textContent = topicName;
+
+                        card.appendChild(icon);
+                        card.appendChild(textSpan);
+                        topicsList.appendChild(card);
+                    });
+                     checkInitialState();
+                } else {
+                    emptyTopics.textContent = "No se encontraron temas (carpetas) en la ruta especificada.";
+                }
+
+            } catch (error) {
+                console.error("Error al cargar temas desde GitHub:", error);
+                emptyTopics.textContent = `Error: ${error.message}`;
+            } finally {
+                setLoadingState(loadTopicsBtn, false, "Recargar Temas");
+            }
+        }
+        
+        async function loadAudiosFromTopic(topicPath, trackToLoad = 0, startTime = 0) {
+            const topicButton = document.querySelector(`.topic-card[data-path="${topicPath}"]`);
+            if (topicButton) {
+                 document.querySelectorAll('.topic-card').forEach(btn => btn.classList.remove('active'));
+                 topicButton.classList.add('active');
+                 currentTopic.name = topicButton.querySelector('span').textContent;
+                 currentTopic.path = topicPath;
+                 topicTitle.textContent = currentTopic.name;
+            }
+
+            currentTrackTitle.textContent = 'Cargando audios...';
+            playlist = [];
+            renderPlaylist();
+
+            const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${topicPath}`;
+            const audioExtensions = ['.wav', '.mp3', '.ogg', '.flac', '.m4a'];
+            const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+            const transcriptExtension = '.txt'; // <-- CAMBIADO A .TXT
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
+                const files = await response.json();
+                
+                const audioFilesData = files.filter(file => file.type === 'file' && audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
+                const transcriptFiles = files.filter(file => file.name.toLowerCase().endsWith(transcriptExtension));
+
+                const audioFiles = audioFilesData.map(file => {
+                    const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                    const transcriptFile = transcriptFiles.find(tFile => tFile.name.substring(0, tFile.name.lastIndexOf('.')) === baseName);
+                    return {
+                        type: 'remote', 
+                        name: baseName.replace(/_/g, ' '),
+                        src: file.download_url, 
+                        duration: '--:--',
+                        transcriptUrl: transcriptFile ? transcriptFile.download_url : null
+                    };
+                });
+
+                const coverFile = files.find(file => imageExtensions.some(ext => file.name.toLowerCase().endsWith(ext)));
+                currentTopic.cover = coverFile ? coverFile.download_url : null;
+                updateTheme(currentTopic.cover);
+
+                if (audioFiles.length === 0) {
+                    currentTrackTitle.textContent = "No hay audios en este tema.";
+                    playlist = [];
+                } else {
+                    playlist = audioFiles;
+                    loadTrack(trackToLoad, false);
+                    if (startTime > 0) {
+                        audioPlayer.currentTime = startTime;
+                    }
+                }
+            } catch (error) {
+                console.error("Error al cargar audios:", error);
+                currentTrackTitle.textContent = "Error al cargar audios.";
+            } finally {
+                renderPlaylist();
+                fetchAllDurations();
+            }
+        }
+
+        function fetchAllDurations() {
+            playlist.forEach((track, index) => {
+                const listItem = document.querySelector(`.playlist-item[data-index="${index}"] .track-duration`);
+                if(listItem) {
+                    fetchTrackDuration(track.src, listItem);
+                }
+            });
+        }
+
+        function fetchTrackDuration(src, element) {
+            const tempAudio = new Audio();
+            tempAudio.src = src;
+            tempAudio.addEventListener('loadedmetadata', () => {
+                if(isFinite(tempAudio.duration)) {
+                    element.textContent = formatTime(tempAudio.duration);
+                }
+            });
+        }
+        
+        async function loadTranscription(url) {
+            transcriptionContent.innerHTML = '';
+            transcriptPlaceholder.textContent = 'Cargando transcripción...';
+            transcriptionContent.appendChild(transcriptPlaceholder);
+            transcriptBtn.disabled = true;
+
+            if (!url) {
+                transcriptPlaceholder.textContent = 'Transcripción no disponible para esta pista.';
+                return;
+            }
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('No se pudo cargar la transcripción.');
+                const text = await response.text();
+                transcriptionContent.textContent = text;
+                transcriptBtn.disabled = false;
+            } catch(error) {
+                console.error(error);
+                transcriptPlaceholder.textContent = 'Error al cargar la transcripción.';
+            }
+        }
+        
+        // --- Lógica de Estado y Compartir ---
+
+        function saveState() {
+             if (playlist.length === 0 || (playlist[0] && playlist[0].type === 'local')) return;
+             const state = {
+                 topicPath: currentTopic.path,
+                 trackIndex: currentTrackIndex,
+                 time: audioPlayer.currentTime,
+                 volume: audioPlayer.volume
+             };
+             localStorage.setItem('audioPlayerState', JSON.stringify(state));
+        }
+
+        function checkInitialState() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const topicParam = urlParams.get('topic');
+            const trackParam = urlParams.get('track');
+
+            if (topicParam) {
+                loadAudiosFromTopic(topicParam, parseInt(trackParam || 0));
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return;
+            }
+            
+            const savedState = localStorage.getItem('audioPlayerState');
+            if (savedState) {
+                const { topicPath, trackIndex, time, volume } = JSON.parse(savedState);
+                if (volume !== undefined) {
+                    volumeSlider.value = volume * 100;
+                    setVolume(volume);
+                }
+                if (topicPath) {
+                    loadAudiosFromTopic(topicPath, trackIndex, time);
+                }
+            } else {
+                 topicTitle.textContent = "Selector de Clases";
+                 currentTrackTitle.textContent = "Selecciona un tema";
+            }
+        }
+        
+        async function shareCurrentTrack() {
+            if (currentTrackIndex === -1 || (playlist[0] && playlist[0].type === 'local')) {
+                showNotification("No se puede compartir esta pista");
+                return;
+            }
+            const trackName = playlist[currentTrackIndex].name;
+            const url = new URL(window.location.href.split('?')[0]);
+            url.searchParams.set('topic', currentTopic.path);
+            url.searchParams.set('track', currentTrackIndex);
+            const shareUrl = url.toString();
+
+            const shareData = {
+                title: `Estoy escuchando: ${currentTopic.name}`,
+                text: `Escucha "${trackName}" del tema "${currentTopic.name}"`,
+                url: shareUrl,
+            };
+
+            if (navigator.share) {
+                try {
+                    await navigator.share(shareData);
+                    return; 
+                } catch (err) {
+                    console.log("Web Share API no disponible o cancelada.", err);
+                }
+            }
+            
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                showNotification("¡Enlace copiado al portapapeles!");
+            } catch (err) {
+                console.error("Fallo al copiar enlace. Usando método antiguo.", err);
+                const textArea = document.createElement("textarea");
+                textArea.value = shareUrl;
+                textArea.style.position = "fixed";
+                textArea.style.opacity = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showNotification("¡Enlace copiado al portapapeles!");
+                } catch (execErr) {
+                    showNotification("Error al copiar el enlace.");
+                    console.error("Fallo total al copiar:", execErr);
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+
+
+        function showNotification(message) {
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Lógica del Reproductor ---
+
+        function updateTheme(imageUrl) {
+            if (!imageUrl) {
+                playerContainer.style.background = '';
+                albumArt.classList.add('hidden');
+                albumArtPlaceholder.classList.remove('hidden');
+                return;
+            }
+
+            albumArt.src = imageUrl;
+            albumArt.classList.remove('hidden');
+            albumArtPlaceholder.classList.add('hidden');
+
+            const colorThief = new ColorThief();
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.src = imageUrl;
+            img.onload = () => {
+                const color = colorThief.getColor(img);
+                playerContainer.style.background = `linear-gradient(to bottom, rgb(${color[0]}, ${color[1]}, ${color[2]}) 0%, #111827 50%)`;
+            };
+            img.onerror = () => { playerContainer.style.background = ''; };
+        }
+
+        function loadTrack(index, shouldPlay = false) {
+            if (index < 0 || index >= playlist.length) return;
+            currentTrackIndex = index;
+            const trackData = playlist[index];
+            if (trackData.type === 'local') {
+                 audioPlayer.src = URL.createObjectURL(trackData.file);
+            } else {
+                 audioPlayer.src = trackData.src;
+            }
+            currentTrackTitle.textContent = trackData.name;
+            updatePlayingIndicator();
+            loadTranscription(trackData.transcriptUrl);
+            if (shouldPlay) playAudio();
+        }
+        
+        function playAudio() {
+            if (currentTrackIndex === -1 && playlist.length > 0) { loadTrack(0, true); return; }
+            if (currentTrackIndex === -1) return;
+            audioPlayer.play().then(() => {
+                isPlaying = true;
+                playIcon.classList.add('hidden');
+                pauseIcon.classList.remove('hidden');
+                updatePlayingIndicator();
+            }).catch(e => console.error("Error al reproducir:", e));
+        }
+
+        function pauseAudio() {
+            isPlaying = false;
+            audioPlayer.pause();
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+            updatePlayingIndicator();
+        }
+
+        function nextTrack() {
+            const newIndex = playlist.length > 0 ? (currentTrackIndex + 1) % playlist.length : -1;
+            if (newIndex !== -1) loadTrack(newIndex, isPlaying);
+        }
+
+        function prevTrack() {
+            const newIndex = playlist.length > 0 ? (currentTrackIndex - 1 + playlist.length) % playlist.length : -1;
+            if (newIndex !== -1) loadTrack(newIndex, isPlaying);
+        }
+
+        // --- Lógica de UI y Utilidades ---
+
+        function updateProgress() {
+            if (audioPlayer.duration && isFinite(audioPlayer.duration)) {
+                progressBar.style.width = `${(audioPlayer.currentTime / audioPlayer.duration) * 100}%`;
+                currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+                if (++timeUpdateCounter > 5) {
+                    saveState();
+                    timeUpdateCounter = 0;
+                }
+            }
+        }
+        
+        function setProgress(e) {
+            const duration = audioPlayer.duration;
+            if (duration && isFinite(duration)) audioPlayer.currentTime = (e.offsetX / progressBarContainer.clientWidth) * duration;
+        }
+        
+        function setVolume(volumeLevel) {
+            audioPlayer.volume = volumeLevel;
+            if (volumeLevel === 0) {
+                volumeIcon.className = 'ph-fill ph-speaker-slash text-2xl text-gray-300 group-hover:text-white';
+            } else if (volumeLevel < 0.5) {
+                volumeIcon.className = 'ph-fill ph-speaker-low text-2xl text-gray-300 group-hover:text-white';
+            } else {
+                volumeIcon.className = 'ph-fill ph-speaker-high text-2xl text-gray-300 group-hover:text-white';
+            }
+        }
+
+        function toggleMute() {
+            if (audioPlayer.volume > 0) {
+                lastVolume = audioPlayer.volume;
+                setVolume(0);
+                volumeSlider.value = 0;
+            } else {
+                setVolume(lastVolume);
+                volumeSlider.value = lastVolume * 100;
+            }
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds) || !isFinite(seconds)) return '--:--';
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        }
+        
+        function renderPlaylist() {
+            playlistElement.innerHTML = '';
+            if (playlist.length === 0) {
+                emptyPlaylistMessage.textContent = 'No hay audios en este tema.';
+                playlistElement.appendChild(emptyPlaylistMessage);
+                disableControls();
+                return;
+            }
+            enableControls();
+            if(document.body.contains(emptyPlaylistMessage)) emptyPlaylistMessage.remove();
+            
+            playlist.forEach((trackData, index) => {
+                const li = document.createElement('li');
+                li.className = 'playlist-item p-3 rounded-lg cursor-pointer text-sm flex items-center gap-4';
+                li.dataset.index = index;
+                li.onclick = () => loadTrack(index, true);
+
+                const numberSpan = document.createElement('span');
+                numberSpan.className = 'playlist-track-number text-gray-400 w-5 text-right font-mono';
+                numberSpan.textContent = `${index + 1}`;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'track-name flex-grow';
+                nameSpan.textContent = trackData.name;
+
+                const indicator = document.createElement('div');
+                indicator.className = 'playing-indicator h-4 w-5 flex items-center justify-between';
+                indicator.innerHTML = `<span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>`;
+
+                const durationSpan = document.createElement('span');
+                durationSpan.className = 'track-duration text-gray-400 font-mono';
+                durationSpan.textContent = trackData.duration || '--:--';
+
+
+                li.appendChild(numberSpan);
+                li.appendChild(nameSpan);
+                li.appendChild(indicator);
+                li.appendChild(durationSpan);
+                playlistElement.appendChild(li);
+            });
+            updatePlayingIndicator();
+        }
+        
+        function updatePlayingIndicator() {
+            document.querySelectorAll('.playlist-item').forEach((item) => {
+                const itemIndex = parseInt(item.dataset.index);
+                item.classList.toggle('active', itemIndex === currentTrackIndex);
+                item.classList.toggle('playing', itemIndex === currentTrackIndex && isPlaying);
+            });
+        }
+        
+        function disableControls() {
+            playPauseBtn.disabled = true;
+            nextBtn.disabled = true;
+            prevBtn.disabled = true;
+            shareBtn.disabled = true;
+            transcriptBtn.disabled = true;
+        }
+        
+        function enableControls() {
+             playPauseBtn.disabled = false;
+             nextBtn.disabled = false;
+             prevBtn.disabled = false;
+             shareBtn.disabled = playlist.length > 0 && playlist[0] && playlist[0].type !== 'local';
+             transcriptBtn.disabled = false;
+        }
+
+        function setLoadingState(button, isLoading, loadingText) {
+            const icon = button.querySelector('i');
+            const textSpan = button.querySelector('span');
+            button.disabled = isLoading;
+            if (isLoading) {
+                textSpan.textContent = loadingText;
+                icon.classList.add('animate-spin');
+            } else {
+                textSpan.textContent = "Recargar Temas";
+                icon.classList.remove('animate-spin');
+            }
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', loadTopicsFromRepo);
+        loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
+        shareBtn.addEventListener('click', shareCurrentTrack);
+        transcriptBtn.addEventListener('click', () => transcriptionContainer.classList.toggle('open'));
+        
+        fileInput.addEventListener('change', (e) => {
+            const newFiles = Array.from(e.target.files);
+            if (newFiles.length === 0) return;
+            playlist = newFiles.map(file => ({ type: 'local', name: file.name, file: file, duration: '--:--', transcriptUrl: null }));
+            localStorage.removeItem('audioPlayerState');
+            renderPlaylist();
+            loadTrack(0, false);
+            fetchAllDurations();
+            updateTheme(null);
+            topicTitle.textContent = "Archivos Locales";
+        });
+        
+        playPauseBtn.addEventListener('click', () => isPlaying ? pauseAudio() : playAudio());
+        nextBtn.addEventListener('click', nextTrack);
+        prevBtn.addEventListener('click', prevTrack);
+        audioPlayer.addEventListener('timeupdate', updateProgress);
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            totalDurationDisplay.textContent = formatTime(audioPlayer.duration);
+        });
+        audioPlayer.addEventListener('ended', nextTrack);
+        audioPlayer.addEventListener('play', updatePlayingIndicator);
+        audioPlayer.addEventListener('pause', updatePlayingIndicator);
+
+        progressBarContainer.addEventListener('click', setProgress);
+        volumeSlider.addEventListener('input', (e) => setVolume(e.target.value / 100));
+        volumeIconBtn.addEventListener('click', toggleMute);
+
+        // --- Inicialización ---
+        disableControls();
+    </script>
+</body>
+</html>
+
+  
+
+   
+
+
+   
+
+   
+
+  
+   
+
+   
+
+    
+
+  
+
+   
+
