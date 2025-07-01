@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-    <title>Reproductor de Audio para Estudiar</title>
+    <title>Spotequito - Reproductor de Audio</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="text/javascript">document.oncontextmenu = function(){return false;}</script>
@@ -16,8 +15,12 @@
         .progress-bar-container:hover .progress-bar-thumb { opacity: 1; }
         input[type="file"] { display: none; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap');
+        
         body { font-family: 'Inter', sans-serif; }
         
+        #logo { font-family: 'Poppins', sans-serif; }
+
         /* Estilos de la lista de reproducción */
         .playlist-item:hover { background-color: rgba(255, 255, 255, 0.1); }
         .playlist-item.active { background-color: rgba(255, 255, 255, 0.2); }
@@ -25,6 +28,7 @@
         .playlist-item.playing .track-name { color: #1DB954; /* Verde Spotify */ }
         .playlist-item .playing-indicator { display: none; }
         .playlist-item.playing .playing-indicator { display: block; }
+        .like-btn.liked i { color: #1DB954; }
 
         /* Animación del ecualizador */
         .playing-indicator .eq-bar { animation: play 1.2s infinite ease-in-out; background-color: #1DB954; width: 3px; height: 100%; transform-origin: bottom; }
@@ -58,15 +62,15 @@
 </head>
 <body class="bg-black text-white flex items-center justify-center min-h-screen p-4">
 
-    <div id="player-container" class="w-full max-w-lg mx-auto bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
-
-        <div id="logo" class="absolute top-6 left-6 text-xl font-semibold text-white z-10">Spotequito</div>
+    <div id="player-container" class="relative w-full max-w-lg mx-auto bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
         
+        <div id="logo" class="absolute top-6 left-6 text-xl font-semibold text-white z-10">Spotequito</div>
+
         <audio id="audioPlayer" crossOrigin="anonymous"></audio>
 
         <!-- Cabecera y Controles Principales -->
         <div class="p-6 bg-transparent">
-            <div id="albumArtContainer" class="w-32 h-32 mx-auto mb-4 rounded-lg shadow-lg overflow-hidden flex items-center justify-center bg-gray-800">
+            <div id="albumArtContainer" class="w-32 h-32 mx-auto mb-4 rounded-lg shadow-lg overflow-hidden flex items-center justify-center bg-gray-800 mt-10">
                 <img id="albumArt" src="" alt="Carátula del Tema" class="w-full h-full object-cover hidden">
                 <i id="albumArtPlaceholder" class="ph-fill ph-music-notes text-4xl text-gray-500"></i>
             </div>
@@ -86,12 +90,14 @@
                 </div>
             </div>
 
-            <div class="flex items-center justify-center space-x-2 sm:space-x-4 mt-4">
-                 <button id="transcriptBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Transcripción"><i class="ph-fill ph-text-align-left text-2xl"></i></button>
-                <button id="prevBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
-                <button id="playPauseBtn" class="bg-white text-black w-16 h-16 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-200 transition-colors disabled:opacity-50"><i id="playIcon" class="ph-fill ph-play text-4xl ml-1"></i><i id="pauseIcon" class="ph-fill ph-pause text-4xl hidden"></i></button>
-                <button id="nextBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
-                <button id="shareBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50" title="Compartir"><i class="ph-fill ph-share-network text-2xl"></i></button>
+            <div class="flex items-center justify-between mt-4">
+                 <button id="transcriptBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50 w-10 h-10 flex items-center justify-center" title="Transcripción"><i class="ph-fill ph-text-align-left text-2xl"></i></button>
+                 <div class="flex items-center justify-center space-x-2 sm:space-x-4">
+                    <button id="prevBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-back text-3xl"></i></button>
+                    <button id="playPauseBtn" class="bg-white text-black w-16 h-16 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-200 transition-colors disabled:opacity-50"><i id="playIcon" class="ph-fill ph-play text-4xl ml-1"></i><i id="pauseIcon" class="ph-fill ph-pause text-4xl hidden"></i></button>
+                    <button id="nextBtn" class="text-gray-300 hover:text-white transition-colors disabled:opacity-50"><i class="ph-fill ph-skip-forward text-3xl"></i></button>
+                 </div>
+                 <div class="flex items-center justify-end w-10 h-10"></div> <!-- Espaciador para simetría -->
             </div>
         </div>
 
@@ -151,7 +157,6 @@
         const currentTrackTitle = document.getElementById('currentTrackTitle');
         const albumArt = document.getElementById('albumArt');
         const albumArtPlaceholder = document.getElementById('albumArtPlaceholder');
-        const shareBtn = document.getElementById('shareBtn');
         const transcriptBtn = document.getElementById('transcriptBtn');
         const transcriptionContainer = document.getElementById('transcriptionContainer');
         const transcriptionContent = document.getElementById('transcriptionContent');
@@ -172,7 +177,8 @@
 
         // --- Estado de la App ---
         let playlist = [];
-        let currentTopic = { name: '', path: '', cover: null };
+        let likedSongs = [];
+        let currentTopic = { name: '', path: '', cover: null, isLikedSongs: false };
         let currentTrackIndex = -1;
         let isPlaying = false;
         let timeUpdateCounter = 0;
@@ -185,9 +191,34 @@
 
         // --- Lógica Principal ---
         
+        function initializeLikedSongs() {
+            likedSongs = JSON.parse(localStorage.getItem('likedSongs')) || [];
+            const likedSongsCard = document.createElement('button');
+            const topicName = "Me Gusta";
+            likedSongsCard.className = 'topic-card rounded-lg p-3 text-left w-full flex items-center gap-4 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-violet-500';
+            likedSongsCard.dataset.path = 'liked-songs';
+            likedSongsCard.onclick = () => {
+                document.querySelectorAll('.topic-card').forEach(c => c.classList.remove('active'));
+                likedSongsCard.classList.add('active');
+                loadLikedSongs();
+            };
+
+            const icon = document.createElement('i');
+            icon.className = 'ph-fill ph-heart text-3xl text-gray-400';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'font-semibold flex-grow';
+            textSpan.textContent = topicName;
+
+            likedSongsCard.appendChild(icon);
+            likedSongsCard.appendChild(textSpan);
+            topicsList.appendChild(likedSongsCard);
+        }
+
         async function loadTopicsFromRepo() {
             setLoadingState(loadTopicsBtn, true, "Cargando...");
-            topicsList.innerHTML = ''; 
+            // Limpia solo los temas de GitHub, no la tarjeta de "Me Gusta"
+            topicsList.querySelectorAll('.topic-card:not([data-path="liked-songs"])').forEach(el => el.remove());
             emptyTopics.textContent = "Cargando temas desde GitHub...";
             topicsList.appendChild(emptyTopics);
 
@@ -212,8 +243,7 @@
                         card.onclick = () => {
                             document.querySelectorAll('.topic-card').forEach(c => c.classList.remove('active'));
                             card.classList.add('active');
-                            currentTopic.name = topicName;
-                            currentTopic.path = topic.path;
+                            currentTopic = { name: topicName, path: topic.path, cover: null, isLikedSongs: false };
                             loadAudiosFromTopic(topic.path);
                         };
 
@@ -246,8 +276,6 @@
             if (topicButton) {
                  document.querySelectorAll('.topic-card').forEach(btn => btn.classList.remove('active'));
                  topicButton.classList.add('active');
-                 currentTopic.name = topicButton.querySelector('span').textContent;
-                 currentTopic.path = topicPath;
                  topicTitle.textContent = currentTopic.name;
             }
 
@@ -258,7 +286,7 @@
             const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${topicPath}`;
             const audioExtensions = ['.wav', '.mp3', '.ogg', '.flac', '.m4a'];
             const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
-            const transcriptExtension = '.txt'; // <-- CAMBIADO A .TXT
+            const transcriptExtension = '.txt';
 
             try {
                 const response = await fetch(apiUrl);
@@ -300,6 +328,20 @@
             } finally {
                 renderPlaylist();
                 fetchAllDurations();
+            }
+        }
+
+        function loadLikedSongs() {
+            currentTopic = { name: 'Me Gusta', path: 'liked-songs', cover: null, isLikedSongs: true };
+            topicTitle.textContent = currentTopic.name;
+            playlist = [...likedSongs];
+            renderPlaylist();
+            fetchAllDurations();
+            updateTheme(null);
+            if (playlist.length > 0) {
+                loadTrack(0, false);
+            } else {
+                currentTrackTitle.textContent = "Aún no tienes canciones favoritas.";
             }
         }
 
@@ -349,7 +391,7 @@
         function saveState() {
              if (playlist.length === 0 || (playlist[0] && playlist[0].type === 'local')) return;
              const state = {
-                 topicPath: currentTopic.path,
+                 topicPath: currentTopic.isLikedSongs ? 'liked-songs' : currentTopic.path,
                  trackIndex: currentTrackIndex,
                  time: audioPlayer.currentTime,
                  volume: audioPlayer.volume
@@ -363,7 +405,11 @@
             const trackParam = urlParams.get('track');
 
             if (topicParam) {
-                loadAudiosFromTopic(topicParam, parseInt(trackParam || 0));
+                if (topicParam === 'liked-songs') {
+                    loadLikedSongs();
+                } else {
+                    loadAudiosFromTopic(topicParam, parseInt(trackParam || 0));
+                }
                 window.history.replaceState({}, document.title, window.location.pathname);
                 return;
             }
@@ -376,63 +422,17 @@
                     setVolume(volume);
                 }
                 if (topicPath) {
-                    loadAudiosFromTopic(topicPath, trackIndex, time);
+                    if (topicPath === 'liked-songs') {
+                        loadLikedSongs();
+                    } else {
+                        loadAudiosFromTopic(topicPath, trackIndex, time);
+                    }
                 }
             } else {
                  topicTitle.textContent = "Selector de Clases";
                  currentTrackTitle.textContent = "Selecciona un tema";
             }
         }
-        
-        async function shareCurrentTrack() {
-            if (currentTrackIndex === -1 || (playlist[0] && playlist[0].type === 'local')) {
-                showNotification("No se puede compartir esta pista");
-                return;
-            }
-            const trackName = playlist[currentTrackIndex].name;
-            const url = new URL(window.location.href.split('?')[0]);
-            url.searchParams.set('topic', currentTopic.path);
-            url.searchParams.set('track', currentTrackIndex);
-            const shareUrl = url.toString();
-
-            const shareData = {
-                title: `Estoy escuchando: ${currentTopic.name}`,
-                text: `Escucha "${trackName}" del tema "${currentTopic.name}"`,
-                url: shareUrl,
-            };
-
-            if (navigator.share) {
-                try {
-                    await navigator.share(shareData);
-                    return; 
-                } catch (err) {
-                    console.log("Web Share API no disponible o cancelada.", err);
-                }
-            }
-            
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                showNotification("¡Enlace copiado al portapapeles!");
-            } catch (err) {
-                console.error("Fallo al copiar enlace. Usando método antiguo.", err);
-                const textArea = document.createElement("textarea");
-                textArea.value = shareUrl;
-                textArea.style.position = "fixed";
-                textArea.style.opacity = "0";
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    showNotification("¡Enlace copiado al portapapeles!");
-                } catch (execErr) {
-                    showNotification("Error al copiar el enlace.");
-                    console.error("Fallo total al copiar:", execErr);
-                }
-                document.body.removeChild(textArea);
-            }
-        }
-
 
         function showNotification(message) {
             notification.textContent = message;
@@ -511,6 +511,26 @@
             if (newIndex !== -1) loadTrack(newIndex, isPlaying);
         }
 
+        function toggleLike(index, event) {
+            event.stopPropagation(); // Evita que se reproduzca la canción al dar like
+            const track = playlist[index];
+            const songIndex = likedSongs.findIndex(song => song.src === track.src);
+
+            if (songIndex > -1) {
+                likedSongs.splice(songIndex, 1);
+            } else {
+                likedSongs.push(track);
+            }
+            localStorage.setItem('likedSongs', JSON.stringify(likedSongs));
+            
+            // Si estamos en la lista de "Me Gusta", la volvemos a renderizar para quitar la canción
+            if (currentTopic.isLikedSongs) {
+                loadLikedSongs();
+            } else {
+                renderPlaylist(); // Solo actualiza los íconos en la lista actual
+            }
+        }
+
         // --- Lógica de UI y Utilidades ---
 
         function updateProgress() {
@@ -561,7 +581,7 @@
         function renderPlaylist() {
             playlistElement.innerHTML = '';
             if (playlist.length === 0) {
-                emptyPlaylistMessage.textContent = 'No hay audios en este tema.';
+                emptyPlaylistMessage.textContent = currentTopic.isLikedSongs ? 'Aún no tienes canciones favoritas.' : 'No hay audios en este tema.';
                 playlistElement.appendChild(emptyPlaylistMessage);
                 disableControls();
                 return;
@@ -591,11 +611,17 @@
                 durationSpan.className = 'track-duration text-gray-400 font-mono';
                 durationSpan.textContent = trackData.duration || '--:--';
 
+                const likeButton = document.createElement('button');
+                const isLiked = likedSongs.some(song => song.src === trackData.src);
+                likeButton.className = `like-btn text-gray-400 hover:text-white transition-colors ml-auto ${isLiked ? 'liked' : ''}`;
+                likeButton.innerHTML = `<i class="${isLiked ? 'ph-fill' : 'ph'} ph-heart text-xl"></i>`;
+                likeButton.onclick = (e) => toggleLike(index, e);
 
                 li.appendChild(numberSpan);
                 li.appendChild(nameSpan);
                 li.appendChild(indicator);
                 li.appendChild(durationSpan);
+                li.appendChild(likeButton);
                 playlistElement.appendChild(li);
             });
             updatePlayingIndicator();
@@ -613,7 +639,6 @@
             playPauseBtn.disabled = true;
             nextBtn.disabled = true;
             prevBtn.disabled = true;
-            shareBtn.disabled = true;
             transcriptBtn.disabled = true;
         }
         
@@ -621,7 +646,6 @@
              playPauseBtn.disabled = false;
              nextBtn.disabled = false;
              prevBtn.disabled = false;
-             shareBtn.disabled = playlist.length > 0 && playlist[0] && playlist[0].type !== 'local';
              transcriptBtn.disabled = false;
         }
 
@@ -639,9 +663,11 @@
         }
 
         // --- Event Listeners ---
-        document.addEventListener('DOMContentLoaded', loadTopicsFromRepo);
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeLikedSongs();
+            loadTopicsFromRepo();
+        });
         loadTopicsBtn.addEventListener('click', loadTopicsFromRepo);
-        shareBtn.addEventListener('click', shareCurrentTrack);
         transcriptBtn.addEventListener('click', () => transcriptionContainer.classList.toggle('open'));
         
         fileInput.addEventListener('change', (e) => {
@@ -676,3 +702,5 @@
     </script>
 </body>
 </html>
+
+   
